@@ -131,7 +131,7 @@
             clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', 
             clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '',
             eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', invoiceNumber: '', optExtra: '',
-            extraConditions: '', selectedOptions: [], status: 'envoye', isManualPrestation: false, isArchived: false
+            extraConditions: '', selectedOptions: [], status: 'cree', isManualPrestation: false, isArchived: false
         };
 
         let currentView = 'dashboard';
@@ -316,6 +316,7 @@
             });
         };
 
+        // EXPORT SAUVEGARDE
         window.exportData = () => {
             const dataToExport = {
                 associationInfo: associationInfo,
@@ -333,6 +334,7 @@
             showNotification("Sauvegarde générale exportée avec succès !", "success");
         };
 
+        // IMPORT SAUVEGARDE
         window.importData = async (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -386,6 +388,7 @@
             reader.readAsText(file);
         };
 
+        // TÉLÉCHARGER LE PDF UNIQUEMENT
         window.downloadPDF = (dataStr) => {
             const data = JSON.parse(decodeURIComponent(dataStr));
             showNotification("Génération du PDF en cours...", "success");
@@ -553,7 +556,7 @@
                 draftContract = { ...contract, selectedOptions: [...(contract.selectedOptions || [])] };
                 delete draftContract.id; 
                 delete draftContract.createdAt;
-                draftContract.status = 'envoye'; 
+                draftContract.status = 'cree'; 
                 draftContract.isArchived = false;
                 isEditingId = null;
                 setView('dashboard'); 
@@ -606,8 +609,8 @@
             }
         };
 
-        const getStatusLabel = (s) => ({ 'envoye': 'Envoyé', 'signe': 'Reçu signé', 'paye': 'Payé', 'annule': 'Annulé' }[s] || 'Envoyé');
-        const getStatusColor = (s) => ({ 'envoye': 'bg-blue-600 text-white border-blue-700', 'signe': 'bg-green-600 text-white border-green-700', 'paye': 'bg-emerald-600 text-white border-emerald-700', 'annule': 'bg-red-600 text-white border-red-700' }[s] || 'bg-slate-600 text-white border-slate-700');
+        const getStatusLabel = (s) => ({ 'cree': 'Créé', 'envoye': 'Envoyé', 'signe': 'Reçu signé', 'paye': 'Payé', 'annule': 'Annulé' }[s] || 'Créé');
+        const getStatusColor = (s) => ({ 'cree': 'bg-slate-500 text-white border-slate-600', 'envoye': 'bg-blue-600 text-white border-blue-700', 'signe': 'bg-green-600 text-white border-green-700', 'paye': 'bg-emerald-600 text-white border-emerald-700', 'annule': 'bg-red-600 text-white border-red-700' }[s] || 'bg-slate-500 text-white border-slate-600');
 
         window.toggleEventNatureInput = (showManual) => {
             draftContract.isManualPrestation = showManual; renderApp();
@@ -616,7 +619,7 @@
 
         window.cancelEdit = () => {
             isEditingId = null;
-            draftContract = { clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '', eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', invoiceNumber: '', optExtra: '', extraConditions: '', selectedOptions: [], status: 'envoye', isManualPrestation: false, isArchived: false };
+            draftContract = { clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '', eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', invoiceNumber: '', optExtra: '', extraConditions: '', selectedOptions: [], status: 'cree', isManualPrestation: false, isArchived: false };
             renderApp();
         };
 
@@ -624,7 +627,7 @@
             e.preventDefault();
             const data = Object.fromEntries(new FormData(e.target).entries());
             data.selectedOptions = draftContract.selectedOptions;
-            data.status = draftContract.status || 'envoye';
+            data.status = draftContract.status || 'cree';
             data.isArchived = draftContract.isArchived || false;
             data.createdAt = isEditingId ? (contracts.find(c => c.id === isEditingId)?.createdAt || new Date().toISOString()) : new Date().toISOString();
 
@@ -846,6 +849,7 @@
                                             <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                                                 <div class="relative w-full sm:w-auto min-w-[140px]">
                                                     <select onchange="updateContractStatus('${c.id}', this.value)" class="w-full appearance-none border-2 text-[10px] font-black uppercase tracking-wider rounded-xl px-5 py-3 pr-10 focus:outline-none focus:ring-4 focus:ring-blue-100 cursor-pointer shadow-sm transition-all ${getStatusColor(c.status)}">
+                                                        <option value="cree" ${c.status === 'cree' ? 'selected' : ''}>Créé</option>
                                                         <option value="envoye" ${c.status === 'envoye' ? 'selected' : ''}>Envoyé</option>
                                                         <option value="signe" ${c.status === 'signe' ? 'selected' : ''}>Reçu signé</option>
                                                         <option value="paye" ${c.status === 'paye' ? 'selected' : ''}>Payé</option>
@@ -936,6 +940,16 @@
                                         </div>
                                         
                                         <div class="flex flex-wrap items-center gap-4 w-full xl:w-auto">
+                                            <div class="relative w-full sm:w-auto min-w-[140px]">
+                                                <select onchange="updateContractStatus('${c.id}', this.value)" class="w-full appearance-none border-2 text-[10px] font-black uppercase tracking-wider rounded-xl px-5 py-3 pr-10 focus:outline-none focus:ring-4 focus:ring-blue-100 cursor-pointer shadow-sm transition-all ${getStatusColor(c.status)}">
+                                                    <option value="cree" ${c.status === 'cree' ? 'selected' : ''}>Créé</option>
+                                                    <option value="envoye" ${c.status === 'envoye' ? 'selected' : ''}>Envoyé</option>
+                                                    <option value="signe" ${c.status === 'signe' ? 'selected' : ''}>Reçu signé</option>
+                                                    <option value="paye" ${c.status === 'paye' ? 'selected' : ''}>Payé</option>
+                                                    <option value="annule" ${c.status === 'annule' ? 'selected' : ''}>Annulé</option>
+                                                </select>
+                                                <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white"><i data-lucide="chevron-down" class="w-4 h-4"></i></div>
+                                            </div>
                                             <div class="text-right hidden lg:block pr-4 border-r border-slate-300">
                                                 <p class="font-black text-slate-700 text-lg leading-none">${c.totalPrice || '0'} €</p>
                                                 <p class="text-[9px] uppercase font-bold text-slate-400 mb-1">Total TTC</p>
