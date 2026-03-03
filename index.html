@@ -2,8 +2,15 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Quatrième Dimension - Gestion de Contrats</title>
+    
+    <!-- PWA Meta Tags (Installation App) -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="4ème Dim">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2' ry='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'/%3E%3Cpolyline points='21 15 16 10 5 21'/%3E%3C/svg%3E">
     
     <!-- Tailwind CSS pour le style -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -38,6 +45,31 @@
         
         // Logo par défaut si aucun n'est importé
         const FALLBACK_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2' ry='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'/%3E%3Cpolyline points='21 15 16 10 5 21'/%3E%3C/svg%3E";
+
+        // --- Injection dynamique du Manifest PWA ---
+        const injectManifest = () => {
+            const manifest = {
+                name: "Quatrième Dimension - Contrats",
+                short_name: "4ème Dim",
+                start_url: window.location.pathname,
+                display: "standalone",
+                background_color: "#0f172a",
+                theme_color: "#0f172a",
+                icons: [{
+                    src: FALLBACK_LOGO.replace("100", "512").replace("100", "512"), // Transforme le SVG en taille 512x512
+                    sizes: "512x512",
+                    type: "image/svg+xml",
+                    purpose: "any maskable"
+                }]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+            const manifestLink = document.createElement('link');
+            manifestLink.rel = 'manifest';
+            manifestLink.href = URL.createObjectURL(manifestBlob);
+            document.head.appendChild(manifestLink);
+        };
+        injectManifest();
+        // -------------------------------------------
 
         const app = initializeApp(userFirebaseConfig);
         const auth = getAuth(app);
@@ -1064,7 +1096,7 @@
                         
                         <button onclick="downloadPDF('${dataStr}')" title="Télécharger le contrat en PDF" class="bg-slate-100 text-slate-800 px-4 py-2 rounded-xl shadow-sm flex items-center gap-2 hover:bg-slate-200 transition-all font-black text-[10px] uppercase tracking-widest"><i data-lucide="download" class="w-4 h-4"></i> PDF</button>
                         
-                        <!-- NOUVEAU BOUTON ENVOI AUTO -->
+                        <!-- BOUTON ENVOI AUTO -->
                         <button onclick="sendDirectEmail('${dataStr}')" title="Crée le PDF et l'envoie en arrière-plan via l'API Gmail" class="bg-emerald-600 text-white px-5 py-2 rounded-xl shadow-lg flex items-center gap-2 hover:bg-emerald-700 transition-all hover:scale-105 font-black text-[10px] uppercase tracking-widest"><i data-lucide="send" class="w-4 h-4"></i> Envoi Auto</button>
                         
                         <button onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 hover:bg-black transition-all hover:scale-105 font-black text-[10px] uppercase tracking-widest"><i data-lucide="printer" class="w-4 h-4"></i> Imprimer</button>
