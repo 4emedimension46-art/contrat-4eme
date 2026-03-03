@@ -65,7 +65,7 @@
             clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', 
             clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '',
             eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', optExtra: '',
-            extraConditions: '', selectedOptions: [], status: 'envoye', isManualPrestation: false
+            extraConditions: 'Les repas et les boissons sont à la charge de l\'organisateur pendant toute la durée de la prestation.', selectedOptions: [], status: 'envoye', isManualPrestation: false
         };
 
         let currentView = 'dashboard';
@@ -523,7 +523,7 @@
 
         window.cancelEdit = () => {
             isEditingId = null;
-            draftContract = { clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '', eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', optExtra: '', extraConditions: '', selectedOptions: [], status: 'envoye', isManualPrestation: false };
+            draftContract = { clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '', eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', optExtra: '', extraConditions: 'Les repas et les boissons sont à la charge de l\'organisateur pendant toute la durée de la prestation.', selectedOptions: [], status: 'envoye', isManualPrestation: false };
             renderApp();
         };
 
@@ -1100,11 +1100,13 @@
                             </p>
                         </div>
 
-                        <!-- BLOC DISPOSITIONS DIVERSES -->
+                        <!-- BLOC DISPOSITIONS DIVERSES (ORANGE PLUS VOYANT) -->
                         ${data.extraConditions ? `
-                        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900">
-                            <p class="uppercase mb-1 font-black tracking-widest text-[9px] text-blue-700">Demandes spécifiques de l'organisateur</p>
-                            <p class="font-medium leading-tight">${data.extraConditions}</p>
+                        <div class="mt-4 p-3 bg-orange-50 border-2 border-orange-300 rounded-lg text-xs text-orange-900 shadow-sm">
+                            <p class="uppercase mb-1 font-black tracking-widest text-[9px] text-orange-700 flex items-center gap-1">
+                                <i data-lucide="info" class="w-3 h-3"></i> Demandes spécifiques de l'organisateur
+                            </p>
+                            <div class="font-bold leading-tight whitespace-pre-line">${data.extraConditions}</div>
                         </div>` : ''}
 
                         <!-- RETOUR ET SIGNATURES -->
