@@ -344,6 +344,14 @@
             });
         };
 
+        window.openGmail = (dataStr) => {
+            const data = JSON.parse(decodeURIComponent(dataStr));
+            const subject = encodeURIComponent(`Votre Contrat Prestation - Quatrième Dimension`);
+            const body = encodeURIComponent(`Bonjour ${data.clientName || ''},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement.\n\nMerci de bien vouloir nous le retourner signé.\n\nCordialement,\nL'équipe Quatrième Dimension`);
+            const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${data.clientEmail || ''}&su=${subject}&body=${body}`;
+            window.open(gmailLink, '_blank');
+        };
+
         window.updateDraft = (input) => {
             if (input.type === 'checkbox') {
                 const optName = input.name.replace('opt_', '');
@@ -475,9 +483,13 @@
             const contract = contracts.find(c => c.id === contractId);
             if (contract) {
                 draftContract = { ...contract, selectedOptions: [...(contract.selectedOptions || [])] };
-                delete draftContract.id; delete draftContract.createdAt;
-                draftContract.status = 'envoye'; isEditingId = null;
-                setView('dashboard'); showNotification("Contrat dupliqué");
+                delete draftContract.id; 
+                delete draftContract.createdAt;
+                draftContract.status = 'envoye'; 
+                draftContract.isArchived = false; // Réinitialise le statut d'archive pour la copie
+                isEditingId = null;
+                setView('dashboard'); 
+                showNotification("Contrat dupliqué");
             }
         };
 
@@ -866,6 +878,9 @@
                                                 <button onclick='setView("preview", ${JSON.stringify(c).replace(/'/g, "&apos;")})' class="flex-1 md:flex-none px-4 py-2.5 bg-slate-800 text-white rounded-xl hover:bg-slate-700 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95">
                                                     <i data-lucide="file-text" class="w-4 h-4"></i> Consulter
                                                 </button>
+                                                <button onclick="duplicateContract('${c.id}')" class="flex-1 md:flex-none px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95">
+                                                    <i data-lucide="copy" class="w-4 h-4"></i> Dupliquer
+                                                </button>
                                                 <button onclick="toggleArchive('${c.id}', false)" class="flex-1 md:flex-none px-4 py-2.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm active:scale-95">
                                                     <i data-lucide="package-open" class="w-4 h-4"></i> Désarchiver
                                                 </button>
@@ -1049,7 +1064,7 @@
                         
                         <button onclick="downloadPDF('${dataStr}')" title="Télécharger le contrat en PDF" class="bg-slate-100 text-slate-800 px-4 py-2 rounded-xl shadow-sm flex items-center gap-2 hover:bg-slate-200 transition-all font-black text-[10px] uppercase tracking-widest"><i data-lucide="download" class="w-4 h-4"></i> PDF</button>
                         
-                        <!-- BOUTON ENVOI AUTO -->
+                        <!-- NOUVEAU BOUTON ENVOI AUTO -->
                         <button onclick="sendDirectEmail('${dataStr}')" title="Crée le PDF et l'envoie en arrière-plan via l'API Gmail" class="bg-emerald-600 text-white px-5 py-2 rounded-xl shadow-lg flex items-center gap-2 hover:bg-emerald-700 transition-all hover:scale-105 font-black text-[10px] uppercase tracking-widest"><i data-lucide="send" class="w-4 h-4"></i> Envoi Auto</button>
                         
                         <button onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 hover:bg-black transition-all hover:scale-105 font-black text-[10px] uppercase tracking-widest"><i data-lucide="printer" class="w-4 h-4"></i> Imprimer</button>
