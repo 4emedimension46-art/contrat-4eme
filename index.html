@@ -948,9 +948,14 @@
                     </div>
                     <div class="flex flex-wrap gap-2 md:gap-3">
                         <button onclick='setView("history")' class="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">Retour</button>
+                        
                         <button onclick="downloadPDF('${dataStr}')" title="Télécharger le contrat en PDF" class="bg-slate-100 text-slate-800 px-4 py-2 rounded-xl shadow-sm flex items-center gap-2 hover:bg-slate-200 transition-all font-black text-[10px] uppercase tracking-widest"><i data-lucide="download" class="w-4 h-4"></i> PDF</button>
+                        
                         <button onclick="openGmail('${dataStr}')" title="Ouvre Gmail avec le texte préparé" class="bg-slate-100 text-slate-800 px-4 py-2 rounded-xl shadow-sm flex items-center gap-2 hover:bg-slate-200 transition-all font-black text-[10px] uppercase tracking-widest"><i data-lucide="mail" class="w-4 h-4"></i> Mail</button>
+                        
+                        <!-- NOUVEAU BOUTON ENVOI AUTO -->
                         <button onclick="sendDirectEmail('${dataStr}')" title="Crée le PDF et l'envoie en arrière-plan via l'API Gmail" class="bg-emerald-600 text-white px-5 py-2 rounded-xl shadow-lg flex items-center gap-2 hover:bg-emerald-700 transition-all hover:scale-105 font-black text-[10px] uppercase tracking-widest"><i data-lucide="send" class="w-4 h-4"></i> Envoi Auto</button>
+                        
                         <button onclick="window.print()" class="bg-slate-900 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 hover:bg-black transition-all hover:scale-105 font-black text-[10px] uppercase tracking-widest"><i data-lucide="printer" class="w-4 h-4"></i> Imprimer</button>
                     </div>
                 </div>
@@ -964,7 +969,7 @@
                         <div class="absolute top-0 left-0 w-full h-2 bg-blue-600 print-header-bar"></div>
                         
                         <!-- EN-TÊTE -->
-                        <div class="flex justify-between items-start mb-8 border-b-2 border-slate-100 pb-6 mt-2">
+                        <div class="flex justify-between items-start mb-6 border-b-2 border-slate-100 pb-4 mt-2">
                             <div class="w-32 h-32 flex items-center justify-center bg-white p-2">
                                 <img src="${currentLogo}" class="max-w-full max-h-full object-contain">
                             </div>
@@ -979,7 +984,7 @@
                         </div>
 
                         <!-- 1. INFORMATIONS CLIENT -->
-                        <div class="mb-6">
+                        <div class="mb-5">
                             <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">1. Informations Client</h3>
                             <div class="grid grid-cols-2 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-200">
                                 <div>
@@ -1000,9 +1005,9 @@
                         </div>
 
                         <!-- 2. DÉTAILS ÉVÉNEMENT -->
-                        <div class="mb-6">
+                        <div class="mb-5">
                             <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">2. Détails de l'Événement</h3>
-                            <div class="grid grid-cols-3 gap-y-4 gap-x-6 border border-slate-200 p-5 rounded-xl bg-white">
+                            <div class="grid grid-cols-3 gap-y-3 gap-x-6 border border-slate-200 p-4 rounded-xl bg-white">
                                 <div class="col-span-2">
                                     <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Nature de l'événement</span>
                                     <span class="text-base font-black text-slate-900">${val(data.eventNature)}</span>
@@ -1019,7 +1024,7 @@
                                     <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Nombre de convives</span>
                                     <span class="text-sm font-bold text-slate-900">${data.eventGuests || "Non précisé"}</span>
                                 </div>
-                                <div class="col-span-3 mt-2 flex gap-4 pt-4 border-t border-slate-100">
+                                <div class="col-span-3 mt-2 flex gap-4 pt-3 border-t border-slate-100">
                                     <div class="flex-1 bg-slate-50 p-2 rounded-lg text-center border border-slate-200">
                                         <span class="text-[8px] uppercase font-black text-slate-500 block mb-1">Arrivée 4D</span>
                                         <span class="text-sm font-black text-slate-800">${val(data.timeArrival, "..:..")}</span>
@@ -1037,24 +1042,25 @@
                         </div>
 
                         <!-- 3. PRESTATIONS & PRIX -->
-                        <div class="mb-auto">
+                        <div>
                             <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">3. Prestations & Facturation</h3>
-                            <div class="grid grid-cols-2 gap-6">
+                            <div class="grid grid-cols-2 gap-6 items-start">
                                 <div class="space-y-2">
                                     <span class="text-[9px] uppercase font-black text-slate-400 block mb-2">Prestations Incluses</span>
                                     ${optionsToDisplay.length > 0 ? optionsToDisplay.map(opt => `
-                                        <div class="flex items-center gap-2 text-xs font-bold text-slate-800 border-b border-slate-100 pb-1">
+                                        <div class="flex items-center gap-2 text-xs font-bold text-slate-800 border-b border-slate-50 pb-1.5">
                                             <i data-lucide="check-square" class="w-4 h-4 text-blue-600"></i> ${opt}
                                         </div>
                                     `).join('') : '<span class="text-xs text-slate-500 italic">Aucune option sélectionnée.</span>'}
                                 </div>
-                                <div class="bg-slate-900 text-white p-6 rounded-2xl flex flex-col justify-center items-end text-right border-4 border-blue-600 relative overflow-hidden">
-                                    <p class="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1 relative z-10">Rémunération Forfaitaire</p>
-                                    <div class="flex items-baseline gap-2 relative z-10">
+                                <!-- La case du prix utilise maintenant self-start et n'est plus étirée -->
+                                <div class="bg-slate-900 text-white p-5 rounded-2xl flex flex-col items-end text-right border-4 border-blue-600 relative">
+                                    <p class="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Rémunération Forfaitaire</p>
+                                    <div class="flex items-baseline gap-2">
                                         <p class="text-5xl font-black tracking-tighter">${data.totalPrice || "........"}</p>
                                         <p class="text-2xl font-bold text-blue-400">€ <span class="text-xs font-normal opacity-60">TTC</span></p>
                                     </div>
-                                    <div class="mt-4 text-[8px] text-slate-300 italic opacity-80 relative z-10 leading-tight">
+                                    <div class="mt-2 text-[8px] text-slate-400 italic opacity-80 leading-tight">
                                         Association non assujettie à la TVA (Article 293B du CGI).
                                     </div>
                                 </div>
