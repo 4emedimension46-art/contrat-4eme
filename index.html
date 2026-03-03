@@ -64,8 +64,8 @@
         let draftContract = {
             clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', 
             clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '',
-            eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', optExtra: '',
-            extraConditions: '', selectedOptions: [], status: 'envoye', isManualPrestation: false
+            eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', invoiceNumber: '', optExtra: '',
+            extraConditions: '', selectedOptions: [], status: 'envoye', isManualPrestation: false, isArchived: false
         };
 
         let currentView = 'dashboard';
@@ -497,6 +497,16 @@
             } catch (e) { showNotification("Erreur", "error"); }
         };
 
+        window.toggleArchive = async (contractId, status) => {
+            if (!user || !contractId) return;
+            if (status && !confirm("Voulez-vous archiver ce contrat ? Il sera déplacé dans l'onglet Archives.")) return;
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'contracts', contractId), { isArchived: status });
+                showNotification(status ? "Contrat archivé avec succès" : "Contrat restauré dans l'historique");
+                if (!status && currentView === 'archives') setView('history');
+            } catch (err) { showNotification("Erreur lors de l'archivage", "error"); }
+        };
+
         window.updateContractStatus = async (contractId, newStatus) => {
             if (!user || !contractId) return;
             try {
@@ -526,7 +536,7 @@
 
         window.cancelEdit = () => {
             isEditingId = null;
-            draftContract = { clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '', eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', optExtra: '', extraConditions: '', selectedOptions: [], status: 'envoye', isManualPrestation: false };
+            draftContract = { clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '', eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', invoiceNumber: '', optExtra: '', extraConditions: '', selectedOptions: [], status: 'envoye', isManualPrestation: false, isArchived: false };
             renderApp();
         };
 
@@ -535,6 +545,7 @@
             const data = Object.fromEntries(new FormData(e.target).entries());
             data.selectedOptions = draftContract.selectedOptions;
             data.status = draftContract.status || 'envoye';
+            data.isArchived = draftContract.isArchived || false;
             data.createdAt = isEditingId ? (contracts.find(c => c.id === isEditingId)?.createdAt || new Date().toISOString()) : new Date().toISOString();
 
             try {
@@ -569,11 +580,12 @@
             nav.innerHTML = `
                 <div class="flex items-center gap-3">
                     <div class="bg-white w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"><img src="${associationInfo.logo || FALLBACK_LOGO}" alt="4D" class="w-full h-full object-cover"></div>
-                    <div><h1 class="font-bold leading-none">Quatrième Dimension</h1><p class="text-[10px] text-blue-300 uppercase mt-1">Gestionnaire de Contrats</p></div>
+                    <div><h1 class="font-bold leading-none hidden sm:block">Quatrième Dimension</h1><p class="text-[10px] text-blue-300 uppercase mt-1 hidden sm:block">Gestionnaire de Contrats</p></div>
                 </div>
-                <div class="flex gap-2 md:gap-6">
+                <div class="flex gap-2 md:gap-6 overflow-x-auto pb-1 sm:pb-0">
                     <button onclick="setView('dashboard')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'dashboard' ? 'text-blue-400' : ''}"><i data-lucide="plus-circle" class="w-5 h-5"></i> <span class="hidden md:inline">Nouveau</span></button>
                     <button onclick="setView('history')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'history' ? 'text-blue-400' : ''}"><i data-lucide="history" class="w-5 h-5"></i> <span class="hidden md:inline">Historique</span></button>
+                    <button onclick="setView('archives')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'archives' ? 'text-blue-400' : ''}"><i data-lucide="archive" class="w-5 h-5"></i> <span class="hidden md:inline">Archives</span></button>
                     <button onclick="setView('clients')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'clients' ? 'text-blue-400' : ''}"><i data-lucide="users" class="w-5 h-5"></i> <span class="hidden md:inline">Clients</span></button>
                     <button onclick="setView('settings')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'settings' ? 'text-blue-400' : ''}"><i data-lucide="settings" class="w-5 h-5"></i> <span class="hidden md:inline">Paramètres</span></button>
                 </div>
@@ -588,6 +600,7 @@
             } else {
                 if (currentView === 'dashboard') main.appendChild(renderForm());
                 else if (currentView === 'history') main.appendChild(renderHistory());
+                else if (currentView === 'archives') main.appendChild(renderArchives());
                 else if (currentView === 'clients') main.appendChild(renderClients());
                 else if (currentView === 'client-edit') main.appendChild(renderClientEdit(activeData));
                 else if (currentView === 'settings') main.appendChild(renderSettings());
@@ -710,7 +723,8 @@
             const div = document.createElement('div');
             div.className = "space-y-8 animate-in fade-in duration-500";
             
-            const grouped = contracts.reduce((acc, contract) => {
+            const activeContracts = contracts.filter(c => !c.isArchived);
+            const grouped = activeContracts.reduce((acc, contract) => {
                 const name = contract.clientName || 'Sans Nom';
                 if (!acc[name]) acc[name] = [];
                 acc[name].push(contract);
@@ -722,10 +736,10 @@
             div.innerHTML = `
                 <div class="flex justify-between items-center">
                     <h2 class="text-2xl font-bold text-slate-800">Historique par client</h2>
-                    <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">${contracts.length} Contrats</span>
+                    <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">${activeContracts.length} Contrats Actifs</span>
                 </div>
                 <div class="space-y-8">
-                    ${contracts.length === 0 ? '<p class="text-slate-400 italic py-10 text-center bg-white rounded-2xl border border-dashed">Aucun contrat enregistré.</p>' : ''}
+                    ${activeContracts.length === 0 ? '<p class="text-slate-400 italic py-10 text-center bg-white rounded-2xl border border-dashed">Aucun contrat actif enregistré.</p>' : ''}
                     ${sortedClientNames.map(clientName => `
                         <div class="space-y-3">
                             <h3 class="text-sm font-black uppercase text-slate-400 tracking-widest flex items-center gap-3 px-2">
@@ -781,7 +795,81 @@
                                                 <button onclick="duplicateContract('${c.id}')" class="flex-1 md:flex-none px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95">
                                                     <i data-lucide="copy" class="w-4 h-4"></i> Dupliquer
                                                 </button>
+                                                <button onclick="toggleArchive('${c.id}', true)" class="flex-1 md:flex-none px-4 py-2.5 bg-slate-200 text-slate-700 rounded-xl hover:bg-slate-300 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm active:scale-95">
+                                                    <i data-lucide="archive" class="w-4 h-4"></i> Archiver
+                                                </button>
                                                 <button onclick="deleteContract('${c.id}')" class="flex-1 md:flex-none px-4 py-2.5 bg-red-100 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 border-2 border-red-200 active:scale-95">
+                                                    <i data-lucide="trash-2" class="w-4 h-4"></i> Supprimer
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            return div;
+        };
+
+        const renderArchives = () => {
+            const div = document.createElement('div');
+            div.className = "space-y-8 animate-in fade-in duration-500";
+            
+            const archivedContracts = contracts.filter(c => c.isArchived);
+            const grouped = archivedContracts.reduce((acc, contract) => {
+                const dateStr = contract.eventDate || contract.createdAt;
+                const year = dateStr ? new Date(dateStr).getFullYear() : 'Inconnu';
+                if (!acc[year]) acc[year] = [];
+                acc[year].push(contract);
+                return acc;
+            }, {});
+
+            const sortedYears = Object.keys(grouped).sort((a, b) => b - a);
+
+            div.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-slate-800">Contrats Archivés</h2>
+                    <span class="bg-slate-200 text-slate-800 px-3 py-1 rounded-full text-xs font-bold">${archivedContracts.length} Archives</span>
+                </div>
+                <div class="space-y-10">
+                    ${archivedContracts.length === 0 ? '<p class="text-slate-400 italic py-10 text-center bg-white rounded-2xl border border-dashed">Aucun contrat n\'est archivé pour le moment.</p>' : ''}
+                    ${sortedYears.map(year => `
+                        <div class="space-y-4">
+                            <h3 class="text-lg font-black uppercase text-slate-600 tracking-widest flex items-center gap-3 px-2 bg-slate-100 p-2 rounded-xl border border-slate-200 inline-flex">
+                                <i data-lucide="folder-archive" class="w-5 h-5 text-slate-500"></i> ANNÉE ${year}
+                                <span class="text-[10px] bg-white text-slate-500 px-2 py-0.5 rounded-full ml-2 shadow-sm">${grouped[year].length} contrat(s)</span>
+                            </h3>
+                            <div class="grid gap-3 pl-2 border-l-4 border-slate-200">
+                                ${grouped[year].map(c => `
+                                    <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col xl:flex-row justify-between xl:items-center hover:border-slate-400 transition-all group gap-6 opacity-80 hover:opacity-100">
+                                        <div class="flex items-center gap-4">
+                                            <div class="bg-slate-200 w-12 h-12 rounded-full flex items-center justify-center text-slate-500">
+                                                <i data-lucide="archive" class="w-6 h-6"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-bold text-lg text-slate-800">${c.clientName} <span class="text-sm font-medium text-slate-500">- ${c.eventNature || 'Prestation'}</span></p>
+                                                <p class="text-xs text-slate-500">${c.eventDate ? new Date(c.eventDate).toLocaleDateString('fr-FR') : 'Date non définie'}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex flex-wrap items-center gap-4 w-full xl:w-auto">
+                                            <div class="text-right hidden lg:block pr-4 border-r border-slate-300">
+                                                <p class="font-black text-slate-700 text-lg leading-none">${c.totalPrice || '0'} €</p>
+                                                <p class="text-[9px] uppercase font-bold text-slate-400 mb-1">Total TTC</p>
+                                                ${c.invoiceNumber ? `<div class="inline-flex items-center gap-1 bg-white text-slate-500 px-2 py-0.5 rounded text-[9px] font-bold border border-slate-200 mt-1"><i data-lucide="file-digit" class="w-3 h-3"></i> ${c.invoiceNumber}</div>` : ''}
+                                            </div>
+                                            
+                                            <!-- BOUTONS D'ACTION ARCHIVES -->
+                                            <div class="flex flex-wrap gap-2 w-full md:w-auto justify-end mt-2 md:mt-0">
+                                                <button onclick='setView("preview", ${JSON.stringify(c).replace(/'/g, "&apos;")})' class="flex-1 md:flex-none px-4 py-2.5 bg-slate-800 text-white rounded-xl hover:bg-slate-700 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95">
+                                                    <i data-lucide="file-text" class="w-4 h-4"></i> Consulter
+                                                </button>
+                                                <button onclick="toggleArchive('${c.id}', false)" class="flex-1 md:flex-none px-4 py-2.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm active:scale-95">
+                                                    <i data-lucide="package-open" class="w-4 h-4"></i> Désarchiver
+                                                </button>
+                                                <button onclick="deleteContract('${c.id}')" class="flex-1 md:flex-none px-4 py-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 border border-red-200 active:scale-95">
                                                     <i data-lucide="trash-2" class="w-4 h-4"></i> Supprimer
                                                 </button>
                                             </div>
