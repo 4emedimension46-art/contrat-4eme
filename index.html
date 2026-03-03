@@ -178,8 +178,8 @@
             showNotification("Création du PDF et envoi en cours...", "success");
             
             const element = document.querySelector('.printable-container');
-            const originalShadow = element.style.boxShadow;
-            element.style.boxShadow = 'none';
+            // On active le mode PDF strict pour éviter les débordements (3ème page)
+            element.classList.add('pdf-mode');
 
             const opt = {
               margin:       0,
@@ -191,7 +191,8 @@
             };
 
             html2pdf().set(opt).from(element).output('datauristring').then(function(pdfDataUri) {
-                element.style.boxShadow = originalShadow;
+                // On désactive le mode PDF pour revenir à l'affichage normal
+                element.classList.remove('pdf-mode');
                 
                 const pdfBase64 = pdfDataUri.split(',')[1];
                 const boundary = "boundary_4D_" + Date.now().toString();
@@ -239,6 +240,10 @@
                         });
                     });
                 });
+            }).catch(err => {
+                element.classList.remove('pdf-mode');
+                console.error(err);
+                showNotification("Erreur lors de la génération PDF.", "error");
             });
         };
 
@@ -320,8 +325,8 @@
             showNotification("Génération du PDF en cours...", "success");
             
             const element = document.querySelector('.printable-container');
-            const originalShadow = element.style.boxShadow;
-            element.style.boxShadow = 'none';
+            // On active le mode PDF strict pour éviter les débordements
+            element.classList.add('pdf-mode');
 
             const opt = {
               margin:       0,
@@ -332,15 +337,14 @@
               pagebreak:    { mode: 'css', before: '.break-before' }
             };
 
-            try {
-                html2pdf().set(opt).from(element).save().then(() => {
-                    element.style.boxShadow = originalShadow;
-                    showNotification("PDF téléchargé avec succès !", "success");
-                });
-            } catch (err) {
+            html2pdf().set(opt).from(element).save().then(() => {
+                element.classList.remove('pdf-mode');
+                showNotification("PDF téléchargé avec succès !", "success");
+            }).catch(err => {
+                element.classList.remove('pdf-mode');
                 console.error(err);
                 showNotification("Le navigateur bloque le téléchargement.", "error");
-            }
+            });
         };
 
         window.openGmail = (dataStr) => {
@@ -1115,6 +1119,21 @@
         .paraph-box { position: absolute; bottom: 1.4cm; right: 1.8cm; font-size: 7px; color: #cbd5e1; text-transform: uppercase; letter-spacing: 2px; border: 1px dashed #f1f5f9; padding: 4px 10px; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-in { animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
+        /* CORRECTION: MODE STRICT POUR GÉNÉRATION PDF SANS DÉBORDEMENT */
+        .pdf-mode { margin: 0 !important; padding: 0 !important; }
+        .pdf-mode .page {
+            margin: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            height: 297mm !important; /* Force la hauteur stricte A4 */
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            overflow: hidden !important; /* Empêche tout pixel de dépasser et créer une page 3 */
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+        }
+
         @media print {
             @page { size: A4; margin: 0; }
             .no-print { display: none !important; }
