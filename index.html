@@ -546,57 +546,65 @@
         };
 
         // ============================================
-        // MOTEUR PDF INVISIBLE - FIX BLANK PAGE ULTIME 2.0
+        // MOTEUR PDF ASYNCHRONE INFAILLIBLE
         // ============================================
-        const generatePDFElement = (data) => {
+        const generatePDFElement = async (data) => {
+            const wrapper = document.createElement('div');
+            // Un conteneur physiquement présent mais totalement imperceptible
+            wrapper.style.position = "fixed";
+            wrapper.style.left = "0px";
+            wrapper.style.top = "0px";
+            wrapper.style.width = "1px";
+            wrapper.style.height = "1px";
+            wrapper.style.overflow = "hidden";
+            wrapper.style.opacity = "0";
+            wrapper.style.pointerEvents = "none";
+            wrapper.style.zIndex = "-1"; 
+            
             const target = document.createElement('div');
             target.className = "printable-container"; 
-            
-            // CORRECTION ULTIME : On rend l'élément invisible pour l'utilisateur, 
-            // mais on ne le met PAS en "overflow: hidden" qui causait la page blanche, 
-            // et on annule les marges "auto" qui le décentraient.
-            target.style.position = "absolute";
-            target.style.left = "0px";
-            target.style.top = "0px";
-            target.style.zIndex = "-9999"; 
             target.style.width = "210mm";
             target.style.backgroundColor = "white";
-            target.style.margin = "0"; // Évite le décalage sur la droite
-            
             target.innerHTML = getContractPages(data);
-            document.body.appendChild(target);
             
-            // On génère les icônes avant la capture
+            wrapper.appendChild(target);
+            document.body.appendChild(wrapper);
+            
+            // Génération des icônes SVG
             lucide.createIcons({ root: target });
             
-            return target;
+            // Délai asynchrone VITAL : laisse le temps à Tailwind de détecter le nouveau DOM 
+            // et au navigateur de peindre les éléments (Base64) avant capture par html2pdf
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve({ wrapper, target });
+                }, 500);
+            });
         };
 
-        window.downloadClientPDF = (dataStr) => {
+        window.downloadClientPDF = async (dataStr) => {
             const data = JSON.parse(decodeURIComponent(dataStr));
             showNotification("Génération de votre exemplaire PDF...", "success");
             
-            const target = generatePDFElement(data);
+            try {
+                const { wrapper, target } = await generatePDFElement(data);
 
-            const opt = {
-              margin:       0,
-              filename:     `Contrat_Signe_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
-              image:        { type: 'jpeg', quality: 0.98 },
-              // Les scroll à 0 évitent que html2canvas ne se perde si la page est défilée
-              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024, scrollX: 0, scrollY: 0 },
-              jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-              pagebreak:    { mode: 'css', before: '.break-before' }
-            };
+                const opt = {
+                    margin:       0,
+                    filename:     `Contrat_Signe_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true, logging: false },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    pagebreak:    { mode: 'css', before: '.break-before' }
+                };
 
-            setTimeout(() => {
-                html2pdf().set(opt).from(target).save().then(() => {
-                    if(document.body.contains(target)) document.body.removeChild(target);
-                    showNotification("Exemplaire PDF téléchargé !", "success");
-                }).catch(err => {
-                    if(document.body.contains(target)) document.body.removeChild(target);
-                    console.error(err);
-                });
-            }, 500); // 500ms pour s'assurer que Tailwind et Lucide ont fini de dessiner
+                await html2pdf().set(opt).from(target).save();
+                if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+                showNotification("Exemplaire PDF téléchargé !", "success");
+            } catch (err) {
+                console.error(err);
+                showNotification("Erreur lors du téléchargement.", "error");
+            }
         };
 
         // ============================================
@@ -644,81 +652,77 @@
             }
         };
 
-        const processAndSendEmail = (data, accessToken) => {
+        const processAndSendEmail = async (data, accessToken) => {
             showNotification("Création du PDF et envoi en cours...", "success");
             
-            const target = generatePDFElement(data);
-            
-            // CORRECTION DE L'ERREUR D'ENVOI : La variable bodyText manquait
-            const bodyText = buildEmailBody(data);
+            try {
+                const { wrapper, target } = await generatePDFElement(data);
+                const bodyText = buildEmailBody(data); // Cette ligne manquait !
 
-            const opt = {
-              margin:       0,
-              filename:     `Contrat_4D_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
-              image:        { type: 'jpeg', quality: 0.98 },
-              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024, scrollX: 0, scrollY: 0 },
-              jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-              pagebreak:    { mode: 'css', before: '.break-before' }
-            };
+                const opt = {
+                    margin:       0,
+                    filename:     `Contrat_4D_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true, logging: false },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    pagebreak:    { mode: 'css', before: '.break-before' }
+                };
 
-            setTimeout(() => {
-                html2pdf().set(opt).from(target).output('datauristring').then(function(pdfDataUri) {
-                    if(document.body.contains(target)) document.body.removeChild(target);
-                    
-                    if (!pdfDataUri || !pdfDataUri.includes(',')) {
-                        throw new Error("Erreur lors de la capture du PDF.");
-                    }
-                    
-                    const pdfBase64 = pdfDataUri.split(',')[1];
-                    const boundary = "boundary_4D_" + Date.now().toString();
-                    const subject = "Votre Contrat Prestation - Quatrième Dimension";
-                    const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
+                const pdfDataUri = await html2pdf().set(opt).from(target).output('datauristring');
+                if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+                
+                if (!pdfDataUri || !pdfDataUri.includes(',')) {
+                    throw new Error("Erreur lors de la capture du PDF.");
+                }
+                
+                const pdfBase64 = pdfDataUri.split(',')[1];
+                const boundary = "boundary_4D_" + Date.now().toString();
+                const subject = "Votre Contrat Prestation - Quatrième Dimension";
+                const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
 
-                    let email = `To: ${data.clientEmail}\r\n`;
-                    email += `Subject: ${utf8Subject}\r\n`;
-                    email += `MIME-Version: 1.0\r\n`;
-                    email += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
-                    
-                    email += `--${boundary}\r\n`;
-                    email += `Content-Type: text/plain; charset="UTF-8"\r\n`;
-                    email += `Content-Transfer-Encoding: 7bit\r\n\r\n`;
-                    email += `${bodyText}\r\n\r\n`;
-                    
-                    email += `--${boundary}\r\n`;
-                    email += `Content-Type: application/pdf; name="${opt.filename}"\r\n`;
-                    email += `Content-Transfer-Encoding: base64\r\n`;
-                    email += `Content-Disposition: attachment; filename="${opt.filename}"\r\n\r\n`;
-                    
-                    const formattedBase64 = pdfBase64.match(/.{1,76}/g).join('\r\n');
-                    email += `${formattedBase64}\r\n\r\n`;
-                    email += `--${boundary}--\r\n`;
+                let email = `To: ${data.clientEmail}\r\n`;
+                email += `Subject: ${utf8Subject}\r\n`;
+                email += `MIME-Version: 1.0\r\n`;
+                email += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+                
+                email += `--${boundary}\r\n`;
+                email += `Content-Type: text/plain; charset="UTF-8"\r\n`;
+                email += `Content-Transfer-Encoding: 7bit\r\n\r\n`;
+                email += `${bodyText}\r\n\r\n`;
+                
+                email += `--${boundary}\r\n`;
+                email += `Content-Type: application/pdf; name="${opt.filename}"\r\n`;
+                email += `Content-Transfer-Encoding: base64\r\n`;
+                email += `Content-Disposition: attachment; filename="${opt.filename}"\r\n\r\n`;
+                
+                const formattedBase64 = pdfBase64.match(/.{1,76}/g).join('\r\n');
+                email += `${formattedBase64}\r\n\r\n`;
+                email += `--${boundary}--\r\n`;
 
-                    const base64EncodedEmail = btoa(unescape(encodeURIComponent(email)))
-                        .replace(/\+/g, '-')
-                        .replace(/\//g, '_')
-                        .replace(/=+$/, '');
+                const base64EncodedEmail = btoa(unescape(encodeURIComponent(email)))
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=+$/, '');
 
-                    gapi.load('client', () => {
-                        gapi.client.setToken({access_token: accessToken});
-                        gapi.client.load('gmail', 'v1', () => {
-                            gapi.client.gmail.users.messages.send({
-                                'userId': 'me',
-                                'resource': { 'raw': base64EncodedEmail }
-                            }).then((response) => {
-                                showNotification("L'email avec le contrat PDF a été envoyé avec succès !", "success");
-                                updateContractStatus(data.id, 'envoye');
-                            }).catch((err) => {
-                                console.error(err);
-                                showNotification("L'envoi a échoué. Vérifiez vos autorisations.", "error");
-                            });
+                gapi.load('client', () => {
+                    gapi.client.setToken({access_token: accessToken});
+                    gapi.client.load('gmail', 'v1', () => {
+                        gapi.client.gmail.users.messages.send({
+                            'userId': 'me',
+                            'resource': { 'raw': base64EncodedEmail }
+                        }).then((response) => {
+                            showNotification("L'email avec le contrat PDF a été envoyé avec succès !", "success");
+                            updateContractStatus(data.id, 'envoye');
+                        }).catch((err) => {
+                            console.error(err);
+                            showNotification("L'envoi a échoué. Vérifiez vos autorisations.", "error");
                         });
                     });
-                }).catch(err => {
-                    if(document.body.contains(target)) document.body.removeChild(target);
-                    console.error(err);
-                    showNotification("Erreur lors de la génération PDF.", "error");
                 });
-            }, 500);
+            } catch (err) {
+                console.error(err);
+                showNotification("Erreur lors de la génération PDF.", "error");
+            }
         };
 
         // EXPORT SAUVEGARDE
@@ -794,31 +798,29 @@
         };
 
         // TÉLÉCHARGER LE PDF UNIQUEMENT
-        window.downloadPDF = (dataStr) => {
+        window.downloadPDF = async (dataStr) => {
             const data = JSON.parse(decodeURIComponent(dataStr));
             showNotification("Génération du PDF en cours...", "success");
             
-            const target = generatePDFElement(data);
+            try {
+                const { wrapper, target } = await generatePDFElement(data);
 
-            const opt = {
-              margin:       0,
-              filename:     `Contrat_4D_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
-              image:        { type: 'jpeg', quality: 0.98 },
-              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024, scrollX: 0, scrollY: 0 },
-              jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-              pagebreak:    { mode: 'css', before: '.break-before' }
-            };
+                const opt = {
+                    margin:       0,
+                    filename:     `Contrat_4D_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true, logging: false },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    pagebreak:    { mode: 'css', before: '.break-before' }
+                };
 
-            setTimeout(() => {
-                html2pdf().set(opt).from(target).save().then(() => {
-                    if(document.body.contains(target)) document.body.removeChild(target);
-                    showNotification("PDF téléchargé avec succès !", "success");
-                }).catch(err => {
-                    if(document.body.contains(target)) document.body.removeChild(target);
-                    console.error(err);
-                    showNotification("Le navigateur bloque le téléchargement.", "error");
-                });
-            }, 500);
+                await html2pdf().set(opt).from(target).save();
+                if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+                showNotification("PDF téléchargé avec succès !", "success");
+            } catch (err) {
+                console.error(err);
+                showNotification("Le navigateur bloque le téléchargement.", "error");
+            }
         };
 
         window.openGmail = (dataStr) => {
@@ -1803,7 +1805,8 @@
         
         .printable-container { width: 100%; max-width: 210mm; background: white; margin: 0 auto; }
         
-        /* CORRECTION PAGE BLANCHE : Hauteur bridée à 295mm au lieu de 297mm */
+        /* CORRECTION DE LA PAGE BLANCHE ET DES COUPURES */
+        /* On ne fixe pas la hauteur : le texte va simplement s'agrandir */
         .page { 
             background: white; 
             box-shadow: none; 
@@ -1811,9 +1814,6 @@
             flex-direction: column; 
             padding: 1.2cm; 
             width: 210mm; 
-            height: 295mm; 
-            max-height: 295mm; 
-            overflow: hidden; 
             position: relative; 
         }
         
@@ -1841,10 +1841,10 @@
             .printable-container { width: 210mm !important; margin: 0 !important; padding: 0 !important; }
             .page { 
                 display: flex !important; flex-direction: column !important; 
-                width: 210mm !important; height: 295mm !important; 
+                width: 210mm !important; 
                 padding: 1.2cm !important; margin: 0 !important; border: none !important; 
                 box-shadow: none !important; page-break-after: always !important; 
-                page-break-inside: avoid !important; overflow: hidden !important; 
+                page-break-inside: avoid !important; overflow: visible !important; 
                 position: relative !important; border-radius: 0 !important; 
             }
             .break-before { page-break-before: always !important; }
