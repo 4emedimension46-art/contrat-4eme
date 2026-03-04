@@ -74,7 +74,6 @@
             manifestLink.href = URL.createObjectURL(manifestBlob);
             document.head.appendChild(manifestLink);
             
-            // Met à jour l'icône Apple au passage
             let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
             if(!appleIcon) {
                 appleIcon = document.createElement('link');
@@ -83,7 +82,7 @@
             }
             appleIcon.href = logoToUse;
         };
-        injectManifest(); // Appel initial avec le fallback
+        injectManifest(); 
         // -------------------------------------------
 
         // GESTION DU BOUTON D'INSTALLATION PWA
@@ -91,7 +90,7 @@
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             window.deferredPrompt = e;
-            renderApp(); // Recharge l'interface pour afficher le bouton d'installation
+            renderApp();
         });
 
         window.installPWA = async () => {
@@ -109,6 +108,10 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        // DETECTER SI ON EST EN MODE "SIGNATURE CLIENT" VIA L'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const signModeId = urlParams.get('sign');
+
         let user = null;
         let clients = [];
         let contracts = [];
@@ -123,7 +126,7 @@
             logo: null,
             signature: null,
             googleClientId: "", 
-            emailTemplate: "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nMerci de bien vouloir nous le retourner signé (\"Lu et approuvé\" + signature).\n\nCordialement,\nL'équipe Quatrième Dimension",
+            emailTemplate: "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nVous pouvez le signer électroniquement et de manière sécurisée en cliquant sur ce lien :\n{{SIGN_LINK}}\n\nCordialement,\nL'équipe Quatrième Dimension",
             prestationTypes: ["Mariage", "Anniversaire", "Soirée de gala", "Bal", "Baptême", "Comité des fêtes"],
             contractOptions: ["Animation DJ", "Jeux / Surprises", "Vidéo + Écran 3x2m", "Sonorisation"]
         };
@@ -135,7 +138,7 @@
             extraConditions: '', selectedOptions: [], status: 'cree', isManualPrestation: false, isArchived: false
         };
 
-        let currentView = 'dashboard';
+        let currentView = signModeId ? 'client-sign' : 'dashboard';
         let activeData = null;
         let isPickerOpen = false;
         let isEditingId = null; 
@@ -181,7 +184,7 @@
                 if (docSnap.exists()) {
                     associationInfo = { ...associationInfo, ...docSnap.data() };
                     if (!associationInfo.contractOptions) associationInfo.contractOptions = ["Animation DJ", "Jeux / Surprises", "Vidéo + Écran 3x2m", "Sonorisation"];
-                    if (!associationInfo.emailTemplate) associationInfo.emailTemplate = "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nMerci de bien vouloir nous le retourner signé (\"Lu et approuvé\" + signature).\n\nCordialement,\nL'équipe Quatrième Dimension";
+                    if (!associationInfo.emailTemplate) associationInfo.emailTemplate = "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nVous pouvez le signer électroniquement et de manière sécurisée en cliquant sur ce lien :\n{{SIGN_LINK}}\n\nCordialement,\nL'équipe Quatrième Dimension";
                     
                     if (associationInfo.logo) {
                         injectManifest(associationInfo.logo);
@@ -191,19 +194,34 @@
                 }
             }, (err) => console.error("Erreur Association:", err));
 
-            const clientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
-            onSnapshot(clientsRef, (snapshot) => {
-                clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderApp();
-            }, (err) => console.error("Erreur Clients:", err));
+            // Si on est en mode signature client, on écoute juste CE contrat spécifique
+            if (signModeId) {
+                const contractRef = doc(db, 'artifacts', appId, 'public', 'data', 'contracts', signModeId);
+                onSnapshot(contractRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        activeData = { id: docSnap.id, ...docSnap.data() };
+                        renderApp();
+                    } else {
+                        activeData = null;
+                        renderApp();
+                    }
+                });
+            } else {
+                // Sinon, écoute normale pour l'admin
+                const clientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
+                onSnapshot(clientsRef, (snapshot) => {
+                    clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderApp();
+                }, (err) => console.error("Erreur Clients:", err));
 
-            const contractsRef = collection(db, 'artifacts', appId, 'public', 'data', 'contracts');
-            onSnapshot(contractsRef, (snapshot) => {
-                contracts = snapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                renderApp();
-            }, (err) => console.error("Erreur Contrats:", err));
+                const contractsRef = collection(db, 'artifacts', appId, 'public', 'data', 'contracts');
+                onSnapshot(contractsRef, (snapshot) => {
+                    contracts = snapshot.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    renderApp();
+                }, (err) => console.error("Erreur Contrats:", err));
+            }
         };
 
         window.setView = (view, data = null) => {
@@ -213,13 +231,122 @@
         };
 
         // ============================================
+        // LOGIQUE SIGNATURE ÉLECTRONIQUE (CANVAS)
+        // ============================================
+        window.initSignaturePad = () => {
+            const canvas = document.getElementById('signature-pad');
+            if(!canvas) return;
+            
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = 192; 
+
+            const ctx = canvas.getContext('2d');
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#0f172a';
+            
+            let drawing = false;
+
+            const getPos = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                return {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+            };
+
+            const startPos = (e) => {
+                e.preventDefault(); 
+                drawing = true;
+                const pos = getPos(e);
+                ctx.beginPath();
+                ctx.moveTo(pos.x, pos.y);
+            };
+
+            const draw = (e) => {
+                e.preventDefault(); 
+                if (!drawing) return;
+                const pos = getPos(e);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+            };
+
+            const stopPos = () => { drawing = false; };
+
+            canvas.addEventListener('mousedown', startPos);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopPos);
+            canvas.addEventListener('mouseout', stopPos);
+            
+            canvas.addEventListener('touchstart', startPos, {passive: false});
+            canvas.addEventListener('touchmove', draw, {passive: false});
+            canvas.addEventListener('touchend', stopPos);
+        };
+
+        window.clearSignature = () => {
+            const canvas = document.getElementById('signature-pad');
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        };
+
+        window.submitClientSignature = async () => {
+            const canvas = document.getElementById('signature-pad');
+            if(!canvas) return;
+            
+            // Vérifie si le canvas est vide (astuce : on le compare à un canvas vide généré)
+            const blank = document.createElement('canvas');
+            blank.width = canvas.width;
+            blank.height = canvas.height;
+            if(canvas.toDataURL() === blank.toDataURL()) {
+                showNotification("Veuillez dessiner votre signature dans le cadre avant de valider.", "error");
+                return;
+            }
+
+            const signatureBase64 = canvas.toDataURL('image/png');
+            
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'contracts', signModeId), { 
+                    clientSignature: signatureBase64,
+                    status: 'signe',
+                    signedAt: new Date().toISOString()
+                });
+                showNotification("Contrat validé et signé avec succès !", "success");
+            } catch (err) {
+                console.error(err);
+                showNotification("Erreur de sauvegarde de la signature.", "error");
+            }
+        };
+
+        window.copySignLink = (contractId) => {
+            // Reconstruit l'URL sans paramètres existants, puis ajoute le paramètre de signature
+            const baseUrl = window.location.href.split('?')[0];
+            const link = `${baseUrl}?sign=${contractId}`;
+            
+            // Crée un champ temporaire pour forcer la copie de manière compatible sur iFrame Canvas et vieux navs
+            const el = document.createElement('textarea');
+            el.value = link;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            
+            showNotification("Lien de signature copié dans le presse-papier !");
+        };
+
+        // ============================================
         // GÉNÉRATION EMAIL PERSONNALISÉ
         // ============================================
         const buildEmailBody = (data) => {
-            let template = associationInfo.emailTemplate || "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nMerci de bien vouloir nous le retourner signé (\"Lu et approuvé\" + signature).\n\nCordialement,\nL'équipe Quatrième Dimension";
+            let template = associationInfo.emailTemplate || "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nVous pouvez le signer électroniquement et de manière sécurisée en cliquant sur ce lien :\n{{SIGN_LINK}}\n\nCordialement,\nL'équipe Quatrième Dimension";
             let clientName = data.clientName || 'Client';
             let eventDate = data.eventDate ? new Date(data.eventDate).toLocaleDateString('fr-FR') : 'date à définir';
-            return template.replace(/{{CLIENT_NAME}}/g, clientName).replace(/{{EVENT_DATE}}/g, eventDate);
+            let signLink = `${window.location.href.split('?')[0]}?sign=${data.id}`;
+            return template.replace(/{{CLIENT_NAME}}/g, clientName).replace(/{{EVENT_DATE}}/g, eventDate).replace(/{{SIGN_LINK}}/g, signLink);
         };
 
         // ============================================
@@ -327,6 +454,7 @@
             });
         };
 
+        // EXPORT SAUVEGARDE
         window.exportData = () => {
             const dataToExport = {
                 associationInfo: associationInfo,
@@ -344,6 +472,7 @@
             showNotification("Sauvegarde générale exportée avec succès !", "success");
         };
 
+        // IMPORT SAUVEGARDE
         window.importData = async (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -397,6 +526,7 @@
             reader.readAsText(file);
         };
 
+        // TÉLÉCHARGER LE PDF UNIQUEMENT
         window.downloadPDF = (dataStr) => {
             const data = JSON.parse(decodeURIComponent(dataStr));
             showNotification("Génération du PDF en cours...", "success");
@@ -564,6 +694,8 @@
                 draftContract = { ...contract, selectedOptions: [...(contract.selectedOptions || [])] };
                 delete draftContract.id; 
                 delete draftContract.createdAt;
+                delete draftContract.clientSignature; // Retire la signature lors de la duplication
+                delete draftContract.signedAt;
                 draftContract.status = 'cree'; 
                 draftContract.isArchived = false;
                 isEditingId = null;
@@ -668,21 +800,32 @@
 
             const nav = document.createElement('nav');
             nav.className = "bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-50 no-print shadow-xl";
-            nav.innerHTML = `
-                <div class="flex items-center gap-3">
-                    <div class="bg-white w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"><img src="${associationInfo.logo || FALLBACK_LOGO}" alt="4D" class="w-full h-full object-cover"></div>
-                    <div><h1 class="font-bold leading-none hidden sm:block">Quatrième Dimension</h1><p class="text-[10px] text-blue-300 uppercase mt-1 hidden sm:block">Gestionnaire de Contrats</p></div>
-                </div>
-                <div class="flex gap-2 md:gap-6 overflow-x-auto pb-1 sm:pb-0 items-center">
-                    <button onclick="setView('dashboard')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'dashboard' ? 'text-blue-400' : ''}"><i data-lucide="layout-dashboard" class="w-5 h-5"></i> <span class="hidden md:inline">Accueil</span></button>
-                    <button onclick="setView('new')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'new' ? 'text-blue-400' : ''}"><i data-lucide="plus-circle" class="w-5 h-5"></i> <span class="hidden md:inline">Nouveau</span></button>
-                    <button onclick="setView('history')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'history' ? 'text-blue-400' : ''}"><i data-lucide="history" class="w-5 h-5"></i> <span class="hidden md:inline">Historique</span></button>
-                    <button onclick="setView('archives')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'archives' ? 'text-blue-400' : ''}"><i data-lucide="archive" class="w-5 h-5"></i> <span class="hidden md:inline">Archives</span></button>
-                    <button onclick="setView('clients')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'clients' ? 'text-blue-400' : ''}"><i data-lucide="users" class="w-5 h-5"></i> <span class="hidden md:inline">Clients</span></button>
-                    <button onclick="setView('settings')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'settings' ? 'text-blue-400' : ''}"><i data-lucide="settings" class="w-5 h-5"></i> <span class="hidden md:inline">Paramètres</span></button>
-                    ${window.deferredPrompt ? `<button onclick="installPWA()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ml-2 shadow-lg"><i data-lucide="download" class="w-4 h-4"></i> <span class="hidden md:inline">Installer l'App</span></button>` : ''}
-                </div>
-            `;
+            
+            // Rendu de la barre de navigation (Différente si c'est le client qui signe ou l'admin)
+            if (signModeId) {
+                nav.innerHTML = `
+                    <div class="flex items-center gap-3 w-full justify-center">
+                        <div class="bg-white w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"><img src="${associationInfo.logo || FALLBACK_LOGO}" alt="Logo" class="w-full h-full object-cover"></div>
+                        <div><h1 class="font-bold leading-none">Quatrième Dimension</h1><p class="text-[10px] text-blue-300 uppercase mt-1">Validation de Contrat</p></div>
+                    </div>
+                `;
+            } else {
+                nav.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="bg-white w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"><img src="${associationInfo.logo || FALLBACK_LOGO}" alt="4D" class="w-full h-full object-cover"></div>
+                        <div><h1 class="font-bold leading-none hidden sm:block">Quatrième Dimension</h1><p class="text-[10px] text-blue-300 uppercase mt-1 hidden sm:block">Gestionnaire de Contrats</p></div>
+                    </div>
+                    <div class="flex gap-2 md:gap-6 overflow-x-auto pb-1 sm:pb-0 items-center">
+                        <button onclick="setView('dashboard')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'dashboard' ? 'text-blue-400' : ''}"><i data-lucide="layout-dashboard" class="w-5 h-5"></i> <span class="hidden md:inline">Accueil</span></button>
+                        <button onclick="setView('new')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'new' ? 'text-blue-400' : ''}"><i data-lucide="plus-circle" class="w-5 h-5"></i> <span class="hidden md:inline">Nouveau</span></button>
+                        <button onclick="setView('history')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'history' ? 'text-blue-400' : ''}"><i data-lucide="history" class="w-5 h-5"></i> <span class="hidden md:inline">Historique</span></button>
+                        <button onclick="setView('archives')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'archives' ? 'text-blue-400' : ''}"><i data-lucide="archive" class="w-5 h-5"></i> <span class="hidden md:inline">Archives</span></button>
+                        <button onclick="setView('clients')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'clients' ? 'text-blue-400' : ''}"><i data-lucide="users" class="w-5 h-5"></i> <span class="hidden md:inline">Clients</span></button>
+                        <button onclick="setView('settings')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'settings' ? 'text-blue-400' : ''}"><i data-lucide="settings" class="w-5 h-5"></i> <span class="hidden md:inline">Paramètres</span></button>
+                        ${window.deferredPrompt ? `<button onclick="installPWA()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ml-2 shadow-lg"><i data-lucide="download" class="w-4 h-4"></i> <span class="hidden md:inline">Installer l'App</span></button>` : ''}
+                    </div>
+                `;
+            }
             appContainer.appendChild(nav);
 
             const main = document.createElement('main');
@@ -690,6 +833,10 @@
             
             if (!user) {
                 main.innerHTML = `<div class="flex flex-col items-center justify-center py-20 text-slate-400"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div><p>Connexion au serveur...</p></div>`;
+            } else if (signModeId) {
+                // Vue spéciale pour la signature client
+                main.appendChild(renderClientSign(activeData));
+                setTimeout(() => window.initSignaturePad(), 100);
             } else {
                 if (currentView === 'dashboard') main.appendChild(renderDashboard());
                 else if (currentView === 'new') main.appendChild(renderForm());
@@ -704,6 +851,66 @@
             appContainer.appendChild(main);
             if (isPickerOpen) appContainer.appendChild(renderClientPicker());
             lucide.createIcons();
+        };
+
+        const renderClientSign = (data) => {
+            const container = document.createElement('div');
+            container.className = "animate-in fade-in";
+            
+            if (!data) {
+                container.innerHTML = `<div class="p-10 text-center text-slate-500">Chargement du contrat ou contrat introuvable...</div>`;
+                return container;
+            }
+
+            const isSigned = !!data.clientSignature;
+
+            container.innerHTML = `
+                <div class="max-w-3xl mx-auto bg-white p-6 md:p-10 rounded-3xl shadow-2xl mt-4 md:mt-8">
+                    <div class="text-center mb-8">
+                        <img src="${associationInfo.logo || FALLBACK_LOGO}" class="w-24 h-24 mx-auto mb-4 object-contain">
+                        <h2 class="text-2xl font-black text-slate-900 leading-tight">Validation de votre contrat</h2>
+                        <p class="text-slate-500 mt-2">Événement de ${data.clientName}</p>
+                    </div>
+                    
+                    <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 mb-8 space-y-4 shadow-inner">
+                        <p class="font-bold text-slate-800 border-b border-slate-200 pb-2 uppercase tracking-wider text-xs"><i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i> Récapitulatif</p>
+                        <div class="grid grid-cols-2 gap-6 text-sm">
+                            <div><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-widest">Prestation</span><span class="font-bold text-slate-800">${data.eventNature}</span></div>
+                            <div><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-widest">Date</span><span class="font-black text-blue-600">${data.eventDate ? new Date(data.eventDate).toLocaleDateString('fr-FR') : '-'}</span></div>
+                            <div class="col-span-2"><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-widest">Lieu</span><span class="font-bold text-slate-800">${data.eventLocation || '-'}</span></div>
+                            <div class="col-span-2 border-t border-slate-200 pt-4"><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-widest">Montant Total Convenu</span><span class="text-2xl font-black text-slate-900">${data.totalPrice} € TTC</span></div>
+                        </div>
+                    </div>
+
+                    ${isSigned ? `
+                        <div class="bg-emerald-50 border-2 border-emerald-200 p-8 rounded-2xl text-center shadow-sm">
+                            <div class="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg"><i data-lucide="check" class="w-8 h-8"></i></div>
+                            <h3 class="text-xl font-black text-emerald-800 mb-2">Contrat signé !</h3>
+                            <p class="text-emerald-700 text-sm">Merci, votre signature a bien été enregistrée le ${new Date(data.signedAt).toLocaleDateString('fr-FR')}. Vous pouvez quitter cette page.</p>
+                            <div class="mt-6 p-4 bg-white rounded-xl border border-emerald-100 inline-block">
+                                <span class="text-[10px] uppercase text-emerald-300 font-bold mb-2 block">Votre signature</span>
+                                <img src="${data.clientSignature}" class="max-h-24 mx-auto object-contain">
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="border-2 border-blue-200 rounded-2xl p-6 md:p-8 bg-blue-50/50 shadow-sm">
+                            <h3 class="text-sm font-black text-blue-900 uppercase tracking-widest mb-2 flex items-center gap-2"><i data-lucide="pen-tool" class="w-5 h-5"></i> Zone de signature</h3>
+                            <p class="text-xs text-slate-600 mb-6 leading-relaxed">En signant ci-dessous, je reconnais avoir pris connaissance du devis et j'accepte les conditions générales du contrat.</p>
+                            
+                            <div class="bg-white border-2 border-dashed border-slate-300 rounded-xl relative overflow-hidden mb-6 shadow-inner">
+                                <canvas id="signature-pad" class="w-full cursor-crosshair touch-none" style="height: 192px;"></canvas>
+                                <div class="absolute bottom-3 left-4 text-[12px] text-slate-300 font-mono pointer-events-none font-bold uppercase">Signez ici avec votre doigt ou souris</div>
+                            </div>
+                            
+                            <div class="flex flex-col-reverse md:flex-row justify-between items-center gap-4">
+                                <button onclick="clearSignature()" class="w-full md:w-auto text-xs text-slate-500 hover:text-slate-800 font-bold px-4 py-3 rounded-xl hover:bg-slate-200 transition-colors">Effacer et recommencer</button>
+                                <button onclick="submitClientSignature()" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl transition-all transform hover:scale-105 flex items-center justify-center gap-2"><i data-lucide="check-circle-2" class="w-5 h-5"></i> Valider ma signature</button>
+                            </div>
+                        </div>
+                    `}
+                </div>
+            `;
+            return container;
         };
 
         const renderDashboard = () => {
@@ -764,7 +971,10 @@
                                         <i data-lucide="file-text" class="w-5 h-5"></i>
                                     </div>
                                     <div>
-                                        <p class="font-bold text-base text-slate-800 group-hover:text-blue-700 transition-colors">${c.clientName}</p>
+                                        <p class="font-bold text-base text-slate-800 group-hover:text-blue-700 transition-colors flex items-center gap-2">
+                                            ${c.clientName} 
+                                            ${c.clientSignature ? '<i data-lucide="pen-tool" class="w-3 h-3 text-emerald-500" title="Signé électroniquement"></i>' : ''}
+                                        </p>
                                         <p class="text-xs text-slate-500 font-medium">${c.eventNature || 'Prestation'} • ${c.eventDate ? new Date(c.eventDate).toLocaleDateString('fr-FR') : 'Date à définir'}</p>
                                     </div>
                                 </div>
@@ -920,8 +1130,9 @@
                                 ${grouped[clientName].map(c => `
                                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col xl:flex-row justify-between xl:items-center hover:border-blue-300 transition-all group gap-6">
                                         <div class="flex items-center gap-4">
-                                            <div class="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500">
+                                            <div class="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 relative">
                                                 <i data-lucide="calendar" class="w-6 h-6"></i>
+                                                ${c.clientSignature ? '<div class="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-1 shadow-sm"><i data-lucide="pen-tool" class="w-3 h-3"></i></div>' : ''}
                                             </div>
                                             <div>
                                                 <p class="font-bold text-lg text-slate-900">${c.eventNature || 'Prestation'}</p>
@@ -1015,8 +1226,9 @@
                                 ${grouped[year].map(c => `
                                     <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col xl:flex-row justify-between xl:items-center hover:border-slate-400 transition-all group gap-6 opacity-80 hover:opacity-100">
                                         <div class="flex items-center gap-4">
-                                            <div class="bg-slate-200 w-12 h-12 rounded-full flex items-center justify-center text-slate-500">
+                                            <div class="bg-slate-200 w-12 h-12 rounded-full flex items-center justify-center text-slate-500 relative">
                                                 <i data-lucide="archive" class="w-6 h-6"></i>
+                                                ${c.clientSignature ? '<div class="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-1 shadow-sm"><i data-lucide="pen-tool" class="w-3 h-3"></i></div>' : ''}
                                             </div>
                                             <div>
                                                 <p class="font-bold text-lg text-slate-800">${c.clientName} <span class="text-sm font-medium text-slate-500">- ${c.eventNature || 'Prestation'}</span></p>
@@ -1152,7 +1364,7 @@
                                 <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"><i data-lucide="mail" class="text-blue-600 w-4 h-4"></i> Modèle d'Email</h3>
                                 <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Message par défaut pour l'envoi de contrat</label>
                                 <textarea name="emailTemplate" class="w-full border-2 border-slate-100 rounded-2xl p-4 h-32 text-sm outline-none focus:border-blue-500 transition-all font-medium text-slate-700">${associationInfo.emailTemplate || ''}</textarea>
-                                <p class="text-[9px] text-slate-400 mt-1 italic">Variables disponibles : <span class="font-bold text-slate-600">{{CLIENT_NAME}}</span> (Nom du client), <span class="font-bold text-slate-600">{{EVENT_DATE}}</span> (Date de l'événement).</p>
+                                <p class="text-[9px] text-slate-400 mt-1 italic">Variables disponibles : <span class="font-bold text-slate-600">{{CLIENT_NAME}}</span> (Nom du client), <span class="font-bold text-slate-600">{{EVENT_DATE}}</span> (Date), <span class="font-bold text-slate-600">{{SIGN_LINK}}</span> (Lien pour signer).</p>
                             </div>
 
                             <div class="md:col-span-2 pt-4 border-t border-slate-100">
@@ -1252,6 +1464,8 @@
                         
                         <button onclick="downloadPDF('${dataStr}')" title="Télécharger le contrat en PDF" class="bg-slate-100 text-slate-800 px-4 py-3 rounded-xl shadow-sm flex items-center justify-center gap-2 hover:bg-slate-200 transition-all font-black text-[10px] uppercase tracking-widest"><i data-lucide="download" class="w-4 h-4"></i> PDF</button>
                         
+                        <button onclick="copySignLink('${data.id}')" title="Copier le lien pour le client" class="bg-indigo-100 text-indigo-800 px-4 py-3 rounded-xl shadow-sm flex items-center justify-center gap-2 hover:bg-indigo-200 transition-all font-black text-[10px] uppercase tracking-widest border border-indigo-200"><i data-lucide="link" class="w-4 h-4"></i> Lien Sign.</button>
+
                         <button onclick="openGmail('${dataStr}')" title="Ouvre Gmail avec le texte préparé" class="bg-slate-100 text-slate-800 px-4 py-3 rounded-xl shadow-sm flex items-center justify-center gap-2 hover:bg-slate-200 transition-all font-black text-[10px] uppercase tracking-widest"><i data-lucide="mail" class="w-4 h-4"></i> Mail</button>
                         
                         <!-- BOUTON ENVOI AUTO -->
@@ -1425,7 +1639,10 @@
                             <div class="mt-4 grid grid-cols-2 gap-6">
                                 <div class="border border-slate-300 rounded-xl p-4 h-32 flex flex-col justify-between bg-white relative">
                                     <div><p class="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-1">Organisateur</p></div>
-                                    <div class="text-[8px] text-slate-400 mt-auto border-t border-slate-100 pt-2 italic text-center">Fait à ................................., le ${today}</div>
+                                    <div class="absolute bottom-2 left-4 max-w-[120px] max-h-[70px] pointer-events-none">
+                                        ${data.clientSignature ? `<img src="${data.clientSignature}" class="w-full h-full object-contain">` : ``}
+                                    </div>
+                                    <div class="text-[8px] text-slate-400 mt-auto border-t border-slate-100 pt-2 italic text-center">Fait à ................................., le ${data.signedAt ? new Date(data.signedAt).toLocaleDateString('fr-FR') : today}</div>
                                 </div>
                                 <div class="border border-blue-200 rounded-xl p-4 h-32 flex flex-col justify-between bg-blue-50/30 relative overflow-hidden">
                                     <div><p class="font-black text-[10px] uppercase tracking-widest text-blue-900 mb-1">Pour Quatrième Dimension</p><p class="text-xs font-black text-slate-800">Mr ${associationInfo.repName}</p></div>
@@ -1500,15 +1717,15 @@
         }
         .pdf-mode .page {
             margin: 0 !important;
-            padding: 1.2cm !important;
+            padding: 1.2cm !important; /* Marge optimisée pour laisser de la place au texte */
             border-radius: 0 !important;
             box-shadow: none !important;
             width: 210mm !important;
-            height: 296mm !important; 
+            height: 296mm !important; /* 1mm en moins pour être absolument certain de ne pas déborder */
             min-height: 296mm !important;
             max-height: 296mm !important;
             box-sizing: border-box !important;
-            overflow: hidden !important;
+            overflow: hidden !important; /* Coupe tout ce qui dépasse */
             page-break-after: auto !important; 
             page-break-before: auto !important; 
             page-break-inside: avoid !important;
