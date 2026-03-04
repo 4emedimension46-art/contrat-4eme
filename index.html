@@ -1,4 +1,4 @@
-<!DOCTYPE html><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
@@ -123,6 +123,7 @@
             logo: null,
             signature: null,
             googleClientId: "", 
+            emailTemplate: "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nMerci de bien vouloir nous le retourner signé (\"Lu et approuvé\" + signature).\n\nCordialement,\nL'équipe Quatrième Dimension",
             prestationTypes: ["Mariage", "Anniversaire", "Soirée de gala", "Bal", "Baptême", "Comité des fêtes"],
             contractOptions: ["Animation DJ", "Jeux / Surprises", "Vidéo + Écran 3x2m", "Sonorisation"]
         };
@@ -180,8 +181,8 @@
                 if (docSnap.exists()) {
                     associationInfo = { ...associationInfo, ...docSnap.data() };
                     if (!associationInfo.contractOptions) associationInfo.contractOptions = ["Animation DJ", "Jeux / Surprises", "Vidéo + Écran 3x2m", "Sonorisation"];
+                    if (!associationInfo.emailTemplate) associationInfo.emailTemplate = "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nMerci de bien vouloir nous le retourner signé (\"Lu et approuvé\" + signature).\n\nCordialement,\nL'équipe Quatrième Dimension";
                     
-                    // Met à jour le manifest avec le logo de l'association s'il existe !
                     if (associationInfo.logo) {
                         injectManifest(associationInfo.logo);
                     }
@@ -209,6 +210,16 @@
             currentView = view;
             activeData = data;
             renderApp();
+        };
+
+        // ============================================
+        // GÉNÉRATION EMAIL PERSONNALISÉ
+        // ============================================
+        const buildEmailBody = (data) => {
+            let template = associationInfo.emailTemplate || "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nMerci de bien vouloir nous le retourner signé (\"Lu et approuvé\" + signature).\n\nCordialement,\nL'équipe Quatrième Dimension";
+            let clientName = data.clientName || 'Client';
+            let eventDate = data.eventDate ? new Date(data.eventDate).toLocaleDateString('fr-FR') : 'date à définir';
+            return template.replace(/{{CLIENT_NAME}}/g, clientName).replace(/{{EVENT_DATE}}/g, eventDate);
         };
 
         // ============================================
@@ -266,7 +277,7 @@
                 const pdfBase64 = pdfDataUri.split(',')[1];
                 const boundary = "boundary_4D_" + Date.now().toString();
                 const subject = "Votre Contrat Prestation - Quatrième Dimension";
-                const bodyText = `Bonjour ${data.clientName || ''},\r\n\r\nVeuillez trouver en pièce jointe le contrat concernant votre événement.\r\n\r\nMerci de bien vouloir nous le retourner signé ("Lu et approuvé" + signature).\r\n\r\nCordialement,\r\nL'équipe Quatrième Dimension`;
+                const bodyText = buildEmailBody(data);
 
                 const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
 
@@ -316,7 +327,6 @@
             });
         };
 
-        // EXPORT SAUVEGARDE
         window.exportData = () => {
             const dataToExport = {
                 associationInfo: associationInfo,
@@ -334,7 +344,6 @@
             showNotification("Sauvegarde générale exportée avec succès !", "success");
         };
 
-        // IMPORT SAUVEGARDE
         window.importData = async (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -388,7 +397,6 @@
             reader.readAsText(file);
         };
 
-        // TÉLÉCHARGER LE PDF UNIQUEMENT
         window.downloadPDF = (dataStr) => {
             const data = JSON.parse(decodeURIComponent(dataStr));
             showNotification("Génération du PDF en cours...", "success");
@@ -418,7 +426,7 @@
         window.openGmail = (dataStr) => {
             const data = JSON.parse(decodeURIComponent(dataStr));
             const subject = encodeURIComponent(`Votre Contrat Prestation - Quatrième Dimension`);
-            const body = encodeURIComponent(`Bonjour ${data.clientName || ''},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement.\n\nMerci de bien vouloir nous le retourner signé.\n\nCordialement,\nL'équipe Quatrième Dimension`);
+            const body = encodeURIComponent(buildEmailBody(data));
             const gmailLink = `https://mail.google.com/mail/?view=cm&fs=1&to=${data.clientEmail || ''}&su=${subject}&body=${body}`;
             window.open(gmailLink, '_blank');
         };
@@ -559,7 +567,7 @@
                 draftContract.status = 'cree'; 
                 draftContract.isArchived = false;
                 isEditingId = null;
-                setView('dashboard'); 
+                setView('new'); 
                 showNotification("Contrat dupliqué");
             }
         };
@@ -568,7 +576,7 @@
             const contract = contracts.find(c => c.id === contractId);
             if (contract) {
                 draftContract = { ...contract, selectedOptions: [...(contract.selectedOptions || [])] };
-                isEditingId = contractId; setView('dashboard'); showNotification("Mode modification activé");
+                isEditingId = contractId; setView('new'); showNotification("Mode modification activé");
             }
         };
 
@@ -620,7 +628,7 @@
         window.cancelEdit = () => {
             isEditingId = null;
             draftContract = { clientName: '', clientOrg: '', clientAddress: '', clientZip: '', clientCity: '', clientTel: '', clientEmail: '', eventNature: '', eventDate: '', eventLocation: '', eventGuests: '', timeArrival: '', timeStart: '', timeEnd: '', totalPrice: '', invoiceNumber: '', optExtra: '', extraConditions: '', selectedOptions: [], status: 'cree', isManualPrestation: false, isArchived: false };
-            renderApp();
+            setView('history');
         };
 
         window.submitContract = async (e) => {
@@ -646,7 +654,7 @@
                     showNotification("Contrat enregistré !");
                 }
                 
-                cancelEdit(); setView('history');
+                cancelEdit();
             } catch (error) { showNotification("Erreur", "error"); }
         };
 
@@ -666,7 +674,8 @@
                     <div><h1 class="font-bold leading-none hidden sm:block">Quatrième Dimension</h1><p class="text-[10px] text-blue-300 uppercase mt-1 hidden sm:block">Gestionnaire de Contrats</p></div>
                 </div>
                 <div class="flex gap-2 md:gap-6 overflow-x-auto pb-1 sm:pb-0 items-center">
-                    <button onclick="setView('dashboard')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'dashboard' ? 'text-blue-400' : ''}"><i data-lucide="plus-circle" class="w-5 h-5"></i> <span class="hidden md:inline">Nouveau</span></button>
+                    <button onclick="setView('dashboard')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'dashboard' ? 'text-blue-400' : ''}"><i data-lucide="layout-dashboard" class="w-5 h-5"></i> <span class="hidden md:inline">Accueil</span></button>
+                    <button onclick="setView('new')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'new' ? 'text-blue-400' : ''}"><i data-lucide="plus-circle" class="w-5 h-5"></i> <span class="hidden md:inline">Nouveau</span></button>
                     <button onclick="setView('history')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'history' ? 'text-blue-400' : ''}"><i data-lucide="history" class="w-5 h-5"></i> <span class="hidden md:inline">Historique</span></button>
                     <button onclick="setView('archives')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'archives' ? 'text-blue-400' : ''}"><i data-lucide="archive" class="w-5 h-5"></i> <span class="hidden md:inline">Archives</span></button>
                     <button onclick="setView('clients')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'clients' ? 'text-blue-400' : ''}"><i data-lucide="users" class="w-5 h-5"></i> <span class="hidden md:inline">Clients</span></button>
@@ -682,7 +691,8 @@
             if (!user) {
                 main.innerHTML = `<div class="flex flex-col items-center justify-center py-20 text-slate-400"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div><p>Connexion au serveur...</p></div>`;
             } else {
-                if (currentView === 'dashboard') main.appendChild(renderForm());
+                if (currentView === 'dashboard') main.appendChild(renderDashboard());
+                else if (currentView === 'new') main.appendChild(renderForm());
                 else if (currentView === 'history') main.appendChild(renderHistory());
                 else if (currentView === 'archives') main.appendChild(renderArchives());
                 else if (currentView === 'clients') main.appendChild(renderClients());
@@ -694,6 +704,81 @@
             appContainer.appendChild(main);
             if (isPickerOpen) appContainer.appendChild(renderClientPicker());
             lucide.createIcons();
+        };
+
+        const renderDashboard = () => {
+            const div = document.createElement('div');
+            div.className = "space-y-6 animate-in fade-in duration-500";
+
+            // Calcul des statistiques
+            const active = contracts.filter(c => !c.isArchived && c.status !== 'annule');
+            const caTotal = active.reduce((sum, c) => sum + (parseFloat(c.totalPrice) || 0), 0);
+            const pendingSignature = active.filter(c => c.status === 'cree' || c.status === 'envoye').length;
+            const signed = active.filter(c => c.status === 'signe').length;
+            const paid = active.filter(c => c.status === 'paye').length;
+
+            div.innerHTML = `
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                    <div>
+                        <h2 class="text-3xl font-black text-slate-800 tracking-tight">Tableau de bord</h2>
+                        <p class="text-slate-500 text-sm font-medium mt-1">Bienvenue dans votre espace de gestion Quatrième Dimension.</p>
+                    </div>
+                    <button onclick="setView('new')" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-3 transition-all transform hover:scale-105">
+                        <i data-lucide="pen-tool" class="w-5 h-5"></i> Créer un contrat
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col hover:border-blue-300 transition-all cursor-default">
+                        <div class="flex items-center gap-3 mb-4 text-blue-600"><i data-lucide="banknote" class="w-6 h-6"></i><span class="text-xs font-black uppercase tracking-widest">Chiffre d'Affaires</span></div>
+                        <p class="text-4xl font-black text-slate-800">${caTotal.toLocaleString('fr-FR')} €</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Sur contrats actifs</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col hover:border-amber-300 transition-all cursor-default">
+                        <div class="flex items-center gap-3 mb-4 text-amber-500"><i data-lucide="clock" class="w-6 h-6"></i><span class="text-xs font-black uppercase tracking-widest">En attente signature</span></div>
+                        <p class="text-4xl font-black text-slate-800">${pendingSignature}</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Contrats envoyés ou créés</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col hover:border-emerald-300 transition-all cursor-default">
+                        <div class="flex items-center gap-3 mb-4 text-emerald-500"><i data-lucide="file-check" class="w-6 h-6"></i><span class="text-xs font-black uppercase tracking-widest">Contrats Signés</span></div>
+                        <p class="text-4xl font-black text-slate-800">${signed}</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">En attente de paiement</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col hover:border-purple-300 transition-all cursor-default">
+                        <div class="flex items-center gap-3 mb-4 text-purple-500"><i data-lucide="check-circle" class="w-6 h-6"></i><span class="text-xs font-black uppercase tracking-widest">Prestations Payées</span></div>
+                        <p class="text-4xl font-black text-slate-800">${paid}</p>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Contrats finalisés</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><i data-lucide="activity" class="w-5 h-5 text-blue-600"></i>Activité récente</h3>
+                        <button onclick="setView('history')" class="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-widest">Tout voir</button>
+                    </div>
+                    <div class="divide-y divide-slate-100">
+                        ${active.slice(0, 5).map(c => `
+                            <div class="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-blue-50/50 transition-colors cursor-pointer group" onclick='setView("preview", ${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                        <i data-lucide="file-text" class="w-5 h-5"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-base text-slate-800 group-hover:text-blue-700 transition-colors">${c.clientName}</p>
+                                        <p class="text-xs text-slate-500 font-medium">${c.eventNature || 'Prestation'} • ${c.eventDate ? new Date(c.eventDate).toLocaleDateString('fr-FR') : 'Date à définir'}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-4 self-end sm:self-auto">
+                                    <span class="text-[10px] font-black px-3 py-1.5 rounded-lg ${getStatusColor(c.status)}">${getStatusLabel(c.status)}</span>
+                                    <i data-lucide="chevron-right" class="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors"></i>
+                                </div>
+                            </div>
+                        `).join('')}
+                        ${active.length === 0 ? '<div class="p-10 text-center text-slate-400 text-sm italic">Aucun contrat en cours. Créez votre premier contrat pour voir vos statistiques.</div>' : ''}
+                    </div>
+                </div>
+            `;
+            return div;
         };
 
         const renderClientPicker = () => {
@@ -1064,6 +1149,13 @@
                             <div><label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">SIRET</label><input type="text" name="siret" value="${associationInfo.siret}" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700"></div>
                             
                             <div class="md:col-span-2 pt-4 border-t border-slate-100">
+                                <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"><i data-lucide="mail" class="text-blue-600 w-4 h-4"></i> Modèle d'Email</h3>
+                                <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Message par défaut pour l'envoi de contrat</label>
+                                <textarea name="emailTemplate" class="w-full border-2 border-slate-100 rounded-2xl p-4 h-32 text-sm outline-none focus:border-blue-500 transition-all font-medium text-slate-700">${associationInfo.emailTemplate || ''}</textarea>
+                                <p class="text-[9px] text-slate-400 mt-1 italic">Variables disponibles : <span class="font-bold text-slate-600">{{CLIENT_NAME}}</span> (Nom du client), <span class="font-bold text-slate-600">{{EVENT_DATE}}</span> (Date de l'événement).</p>
+                            </div>
+
+                            <div class="md:col-span-2 pt-4 border-t border-slate-100">
                                 <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"><i data-lucide="key" class="text-blue-600 w-4 h-4"></i> Intégration Gmail API</h3>
                                 <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Google Client ID (Pour envoi direct)</label>
                                 <input type="text" name="googleClientId" value="${associationInfo.googleClientId || ''}" placeholder="xxxxxxxxxx.apps.googleusercontent.com" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 text-xs">
@@ -1382,7 +1474,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
         * { box-sizing: border-box; }
         :root { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f1f5f9; color: #1e293b; margin: 0; } /* Retrait de overflow-x: hidden qui bloquait le scroll mobile */
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f1f5f9; color: #1e293b; margin: 0; }
         
         .printable-container { width: 100%; max-width: 210mm; }
         .page { background: white; box-shadow: none; display: flex; flex-direction: column; padding: 1.5cm; min-height: 296.5mm; width: 210mm; }
