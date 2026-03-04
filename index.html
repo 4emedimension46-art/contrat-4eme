@@ -342,7 +342,7 @@
 
                 <!-- PAGE 2 : CONDITIONS -->
                 <div class="page relative flex flex-col break-before">
-                    <div class="absolute top-0 left-0 w-full h-1 bg-blue-600"></div>
+                    <div class="absolute top-0 left-0 w-full h-1 bg-blue-600 print-header-bar"></div>
                     
                     <div class="mb-4 text-center mt-2">
                         <h2 class="inline-block px-10 py-2 border-b-4 border-blue-600 text-sm font-black uppercase tracking-[0.4em] text-slate-900">Conditions Contractuelles</h2>
@@ -546,42 +546,56 @@
         };
 
         // ============================================
-        // MOTEUR PDF INVISIBLE
+        // MOTEUR PDF INVISIBLE - FIX BLANK PAGE ULTIME
         // ============================================
         const generatePDFElement = (data) => {
-            const tempDiv = document.createElement('div');
-            tempDiv.className = "printable-container pdf-mode";
-            tempDiv.style.position = "absolute";
-            tempDiv.style.left = "-9999px";
-            tempDiv.style.top = "0";
-            tempDiv.style.width = "210mm";
-            tempDiv.innerHTML = getContractPages(data);
-            document.body.appendChild(tempDiv);
-            return tempDiv;
+            // 1. Le wrapper isole l'élément du viewport pour qu'il soit invisible
+            const wrapper = document.createElement('div');
+            wrapper.style.position = "absolute";
+            wrapper.style.left = "-9999px";
+            wrapper.style.top = "0";
+
+            // 2. La cible ne contient AUCUN style absolu, donc html2pdf la clonant 
+            // la verra comme un élément parfaitement normal au centre de son iframe.
+            const target = document.createElement('div');
+            target.className = "printable-container"; 
+            target.style.width = "210mm";
+            target.style.backgroundColor = "white";
+            target.innerHTML = getContractPages(data);
+            
+            wrapper.appendChild(target);
+            document.body.appendChild(wrapper);
+            
+            // 3. On génère les icônes avant la capture
+            lucide.createIcons({ root: target });
+            
+            return { wrapper, target };
         };
 
         window.downloadClientPDF = (dataStr) => {
             const data = JSON.parse(decodeURIComponent(dataStr));
             showNotification("Génération de votre exemplaire PDF...", "success");
             
-            const tempDiv = generatePDFElement(data);
+            const { wrapper, target } = generatePDFElement(data);
 
             const opt = {
               margin:       0,
               filename:     `Contrat_Signe_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
               image:        { type: 'jpeg', quality: 0.98 },
-              html2canvas:  { scale: 2, useCORS: true, logging: false },
+              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024 },
               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
               pagebreak:    { mode: 'css', before: '.break-before' }
             };
 
-            html2pdf().set(opt).from(tempDiv).save().then(() => {
-                document.body.removeChild(tempDiv);
-                showNotification("Exemplaire PDF téléchargé !", "success");
-            }).catch(err => {
-                document.body.removeChild(tempDiv);
-                console.error(err);
-            });
+            setTimeout(() => {
+                html2pdf().set(opt).from(target).save().then(() => {
+                    if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+                    showNotification("Exemplaire PDF téléchargé !", "success");
+                }).catch(err => {
+                    if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+                    console.error(err);
+                });
+            }, 500);
         };
 
         // ============================================
@@ -632,25 +646,24 @@
         const processAndSendEmail = (data, accessToken) => {
             showNotification("Création du PDF et envoi en cours...", "success");
             
-            const tempDiv = generatePDFElement(data);
+            const { wrapper, target } = generatePDFElement(data);
 
             const opt = {
               margin:       0,
               filename:     `Contrat_4D_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
               image:        { type: 'jpeg', quality: 0.98 },
-              html2canvas:  { scale: 2, useCORS: true, logging: false },
+              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024 },
               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
               pagebreak:    { mode: 'css', before: '.break-before' }
             };
 
-            html2pdf().set(opt).from(tempDiv).output('datauristring').then(function(pdfDataUri) {
-                document.body.removeChild(tempDiv);
-                
-                const pdfBase64 = pdfDataUri.split(',')[1];
-                const boundary = "boundary_4D_" + Date.now().toString();
-                const subject = "Votre Contrat Prestation - Quatrième Dimension";
-                const bodyText = buildEmailBody(data);
-
+            setTimeout(() => {
+                html2pdf().set(opt).from(target).output('datauristring').then(function(pdfDataUri) {
+                    if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+                    
+                    const pdfBase64 = pdfDataUri.split(',')[1];
+                    const boundary = "boundary_4D_" + Date.now().toString();
+                    const subject = "Votre Contrat Prestation - Quatrième Dimension";
                 const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
 
                 let email = `To: ${data.clientEmail}\r\n`;
@@ -693,10 +706,11 @@
                     });
                 });
             }).catch(err => {
-                document.body.removeChild(tempDiv);
+                if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
                 console.error(err);
                 showNotification("Erreur lors de la génération PDF.", "error");
             });
+            }, 500);
         };
 
         // EXPORT SAUVEGARDE
@@ -776,25 +790,27 @@
             const data = JSON.parse(decodeURIComponent(dataStr));
             showNotification("Génération du PDF en cours...", "success");
             
-            const tempDiv = generatePDFElement(data);
+            const { wrapper, target } = generatePDFElement(data);
 
             const opt = {
               margin:       0,
               filename:     `Contrat_4D_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
               image:        { type: 'jpeg', quality: 0.98 },
-              html2canvas:  { scale: 2, useCORS: true, logging: false },
+              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024 },
               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
               pagebreak:    { mode: 'css', before: '.break-before' }
             };
 
-            html2pdf().set(opt).from(tempDiv).save().then(() => {
-                document.body.removeChild(tempDiv);
-                showNotification("PDF téléchargé avec succès !", "success");
-            }).catch(err => {
-                document.body.removeChild(tempDiv);
-                console.error(err);
-                showNotification("Le navigateur bloque le téléchargement.", "error");
-            });
+            setTimeout(() => {
+                html2pdf().set(opt).from(target).save().then(() => {
+                    if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+                    showNotification("PDF téléchargé avec succès !", "success");
+                }).catch(err => {
+                    if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+                    console.error(err);
+                    showNotification("Le navigateur bloque le téléchargement.", "error");
+                });
+            }, 500);
         };
 
         window.openGmail = (dataStr) => {
@@ -1394,7 +1410,7 @@
                                 ${grouped[clientName].map(c => `
                                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col xl:flex-row justify-between xl:items-center hover:border-blue-300 transition-all group gap-6">
                                         <div class="flex items-center gap-4">
-                                            <div class="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 relative">
+                                            <div class="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-50 relative">
                                                 <i data-lucide="calendar" class="w-6 h-6"></i>
                                                 ${c.clientSignature ? '<div class="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-1 shadow-sm"><i data-lucide="pen-tool" class="w-3 h-3"></i></div>' : ''}
                                             </div>
@@ -1777,9 +1793,23 @@
         :root { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f1f5f9; color: #1e293b; margin: 0; }
         
-        .printable-container { width: 100%; max-width: 210mm; }
-        .page { background: white; box-shadow: none; display: flex; flex-direction: column; padding: 1.5cm; min-height: 296.5mm; width: 210mm; }
-        .paraph-box { position: absolute; bottom: 1cm; right: 1.5cm; font-size: 7px; color: #cbd5e1; text-transform: uppercase; letter-spacing: 2px; border: 1px dashed #f1f5f9; padding: 4px 10px; }
+        .printable-container { width: 100%; max-width: 210mm; background: white; margin: 0 auto; }
+        
+        /* CORRECTION PAGE BLANCHE : Hauteur bridée à 295mm au lieu de 297mm */
+        .page { 
+            background: white; 
+            box-shadow: none; 
+            display: flex; 
+            flex-direction: column; 
+            padding: 1.2cm; 
+            width: 210mm; 
+            height: 295mm; 
+            max-height: 295mm; 
+            overflow: hidden; 
+            position: relative; 
+        }
+        
+        .paraph-box { position: absolute; bottom: 1cm; right: 1.2cm; font-size: 7px; color: #cbd5e1; text-transform: uppercase; letter-spacing: 2px; border: 1px dashed #f1f5f9; padding: 4px 10px; }
         
         @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-in { animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -1794,38 +1824,6 @@
         .signature-lock { transition: opacity 0.5s ease; }
         #signature-section:not(.opacity-50) .signature-lock { opacity: 0; pointer-events: none; }
 
-        /* CORRECTION EXTRÊME : MODE PDF SANS DÉBORDEMENTS ET SANS PAGES BLANCHES */
-        .pdf-mode { 
-            margin: 0 !important; 
-            padding: 0 !important; 
-            width: 210mm !important;
-            background: white !important;
-            display: block !important;
-            border: none !important;
-        }
-        .pdf-mode .page {
-            margin: 0 !important;
-            padding: 1.2cm !important; /* Marge optimisée pour laisser de la place au texte */
-            border-radius: 0 !important;
-            box-shadow: none !important;
-            width: 210mm !important;
-            height: 296mm !important; /* 1mm en moins pour être absolument certain de ne pas déborder */
-            min-height: 296mm !important;
-            max-height: 296mm !important;
-            box-sizing: border-box !important;
-            overflow: hidden !important; /* Coupe tout ce qui dépasse */
-            page-break-after: auto !important; 
-            page-break-before: auto !important; 
-            page-break-inside: avoid !important;
-            position: relative !important;
-            display: flex !important;
-            flex-direction: column !important;
-            border: none !important;
-        }
-        .pdf-mode .break-before {
-            page-break-before: auto !important;
-        }
-
         @media print {
             @page { size: A4; margin: 0; }
             .no-print { display: none !important; }
@@ -1835,9 +1833,9 @@
             .printable-container { width: 210mm !important; margin: 0 !important; padding: 0 !important; }
             .page { 
                 display: flex !important; flex-direction: column !important; 
-                width: 210mm !important; height: 296mm !important; 
-                padding: 1.1cm !important; margin: 0 !important; border: none !important; 
-                box-shadow: none !important; page-break-after: auto !important; 
+                width: 210mm !important; height: 295mm !important; 
+                padding: 1.2cm !important; margin: 0 !important; border: none !important; 
+                box-shadow: none !important; page-break-after: always !important; 
                 page-break-inside: avoid !important; overflow: hidden !important; 
                 position: relative !important; border-radius: 0 !important; 
             }
