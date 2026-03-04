@@ -853,6 +853,202 @@
             lucide.createIcons();
         };
 
+        // ============================================
+        // GÉNÉRATION HTML DU CONTRAT (PARTAGÉ CLIENT / ADMIN)
+        // ============================================
+        const generateContractDocument = (data) => {
+            const today = new Date().toLocaleDateString('fr-FR');
+            const val = (v, fallback = "........................................") => v && v.trim() !== "" ? v : fallback;
+            const dateVal = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : "..../..../....";
+            const optionsToDisplay = data.selectedOptions || [];
+            const currentLogo = associationInfo.logo || FALLBACK_LOGO;
+            
+            return `
+                <div class="printable-container mx-auto bg-white shadow-xl rounded-xl overflow-hidden" style="width: 210mm; min-width: 210mm; position: relative;">
+                    
+                    <!-- ============================================== -->
+                    <!-- PAGE 1 : ENGAGEMENT                            -->
+                    <!-- ============================================== -->
+                    <div class="page relative flex flex-col">
+                        <div class="absolute top-0 left-0 w-full h-2 bg-blue-600 print-header-bar"></div>
+                        
+                        <!-- EN-TÊTE -->
+                        <div class="flex justify-between items-start mb-6 border-b-2 border-slate-100 pb-4 mt-2">
+                            <div class="w-32 h-32 flex items-center justify-center bg-white p-2">
+                                <img src="${currentLogo}" class="max-w-full max-h-full object-contain">
+                            </div>
+                            <div class="text-right">
+                                <h1 class="text-4xl font-black uppercase text-slate-900 tracking-tighter mb-1">Contrat de Prestation</h1>
+                                <p class="text-blue-600 font-bold uppercase text-lg tracking-widest mb-4">Engagement</p>
+                                <div class="text-right flex flex-col items-end gap-1 mt-2">
+                                    <span class="bg-slate-100 px-3 py-1 rounded text-[10px] font-mono font-bold text-slate-700">RÉF : ${data.id ? data.id.substring(0,8).toUpperCase() : 'NOUVEAU'}</span>
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase">Édité le ${today}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 1. INFORMATIONS CLIENT -->
+                        <div class="mb-5">
+                            <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">1. Informations Client</h3>
+                            <div class="grid grid-cols-2 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-200">
+                                <div>
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Organisateur / Société</span>
+                                    <span class="text-lg font-black text-slate-900 block leading-none mb-1">${val(data.clientName)}</span>
+                                    ${data.clientOrg ? `<span class="text-xs font-bold text-blue-700 block mb-2">${data.clientOrg}</span>` : ''}
+                                    
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mt-3 mb-1">Adresse</span>
+                                    <p class="text-xs text-slate-700 font-medium leading-snug">${val(data.clientAddress)}<br><span class="font-bold text-slate-900">${val(data.clientZip, "....")} ${val(data.clientCity)}</span></p>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Contact Téléphonique</span>
+                                    <p class="text-sm font-bold text-slate-900 mb-3">${val(data.clientTel)}</p>
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Contact Email</span>
+                                    <p class="text-sm font-bold text-slate-900">${val(data.clientEmail)}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. DÉTAILS ÉVÉNEMENT -->
+                        <div class="mb-5">
+                            <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">2. Détails de l'Événement</h3>
+                            <div class="grid grid-cols-3 gap-y-3 gap-x-6 border border-slate-200 p-4 rounded-xl bg-white">
+                                <div class="col-span-2">
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Nature de l'événement</span>
+                                    <span class="text-base font-black text-slate-900">${val(data.eventNature)}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Date prévue</span>
+                                    <span class="text-base font-black text-blue-700">${dateVal(data.eventDate)}</span>
+                                </div>
+                                <div class="col-span-2">
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Lieu de la prestation</span>
+                                    <span class="text-xs text-slate-800 font-medium leading-snug">${val(data.eventLocation)}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Nombre de convives</span>
+                                    <span class="text-sm font-bold text-slate-900">${data.eventGuests || "Non précisé"}</span>
+                                </div>
+                                <div class="col-span-3 mt-2 flex gap-4 pt-3 border-t border-slate-100">
+                                    <div class="flex-1 bg-slate-50 p-2 rounded-lg text-center border border-slate-200">
+                                        <span class="text-[8px] uppercase font-black text-slate-500 block mb-1">Arrivée 4D</span>
+                                        <span class="text-sm font-black text-slate-800">${val(data.timeArrival, "..:..")}</span>
+                                    </div>
+                                    <div class="flex-1 bg-blue-50 p-2 rounded-lg text-center border border-blue-200">
+                                        <span class="text-[8px] uppercase font-black text-blue-600 block mb-1">Début Soirée</span>
+                                        <span class="text-sm font-black text-blue-900">${val(data.timeStart, "..:..")}</span>
+                                    </div>
+                                    <div class="flex-1 bg-slate-50 p-2 rounded-lg text-center border border-slate-200">
+                                        <span class="text-[8px] uppercase font-black text-slate-500 block mb-1">Fin estimée</span>
+                                        <span class="text-sm font-black text-slate-800">${val(data.timeEnd, "..:..")}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. PRESTATIONS & PRIX -->
+                        <div>
+                            <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">3. Prestations & Facturation</h3>
+                            <div class="grid grid-cols-2 gap-6 items-start">
+                                <div class="space-y-2">
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-2">Prestations Incluses</span>
+                                    ${optionsToDisplay.length > 0 ? optionsToDisplay.map(opt => `
+                                        <div class="flex items-center gap-2 text-xs font-bold text-slate-800 border-b border-slate-50 pb-1.5">
+                                            <i data-lucide="check-square" class="w-4 h-4 text-blue-600"></i> ${opt}
+                                        </div>
+                                    `).join('') : '<span class="text-xs text-slate-500 italic">Aucune option sélectionnée.</span>'}
+                                </div>
+                                <div class="bg-slate-900 text-white p-5 rounded-2xl flex flex-col items-end text-right border-4 border-blue-600 relative">
+                                    <p class="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Rémunération Forfaitaire</p>
+                                    <div class="flex items-baseline gap-2">
+                                        <p class="text-5xl font-black tracking-tighter">${data.totalPrice || "........"}</p>
+                                        <p class="text-2xl font-bold text-blue-400">€ <span class="text-xs font-normal opacity-60">TTC</span></p>
+                                    </div>
+                                    <div class="mt-2 text-[8px] text-slate-400 italic opacity-80 leading-tight">
+                                        Association non assujettie à la TVA (Article 293B du CGI).
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="paraph-box">Initiales Organisateur (P1) :</div>
+                    </div>
+
+                    <!-- ============================================== -->
+                    <!-- PAGE 2 : CONDITIONS                            -->
+                    <!-- ============================================== -->
+                    <div class="page relative flex flex-col break-before">
+                        <div class="absolute top-0 left-0 w-full h-1 bg-blue-600"></div>
+                        
+                        <div class="mb-4 text-center mt-2">
+                            <h2 class="inline-block px-10 py-2 border-b-4 border-blue-600 text-sm font-black uppercase tracking-[0.4em] text-slate-900">Conditions Contractuelles</h2>
+                        </div>
+                        
+                        <p class="text-[9px] font-bold text-slate-800 mb-4 px-2 italic text-center">Par le présent contrat, les deux parties s’engagent à respecter scrupuleusement les clauses suivantes :</p>
+
+                        <!-- ARTICLES ÉPURÉS ET PLUS LISIBLES -->
+                        <div class="text-[10px] text-slate-800 space-y-2.5 text-justify leading-snug px-2 flex-1">
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 1.</strong> En cas de désistement du client, ce dernier s’engage à en avertir QUATRIEME DIMENSION, par courrier, 30 jours avant la date de la prestation convenue initialement.</p>
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 2.</strong> En cas de désistement de QUATRIEME DIMENSION, pour une raison quelconque, QUATRIEME DIMENSION s’engage à en avertir le client, par courrier, 30 jours avant la date de l’évènement.</p>
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 3.</strong> Tout engagement fixé entre les deux parties par le présent contrat sera considéré comme ferme et définitif dès 30 jours avant la date de réalisation de la prestation. Passé ce délai, seul le cas de force majeure(1) tel qu’il est prévu par la loi, pourra annuler la prestation, sans préjudice de tous autres dommages et intérêts, et quelle que soit la partie défaillante. Si, en revanche, le cas de force majeure n’était pas avéré, en cas de désistement du client sous 30 jours avant la date de l’évènement, le client organisateur resterait tenu au paiement de la totalité du montant de la prestation fixé dans le présent contrat.</p>
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 4.</strong> Le client s'engage à réserver à QUATRIEME DIMENSION l'utilisation exclusive d'une surface nécessairement suffisante à l'installation du matériel et d’une puissance électrique nécessaire pour le fonctionnement des appareils. En cas de non-respect de cette clause QUATRIEME DIMENSION se verrait dégagé de son obligation d'exécuter la prestation, en revanche le client resterait tenu au paiement de la totalité de la somme telle qu'elle est prévue.</p>
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 5.</strong> Dans l'hypothèse d'une soirée extérieure, le client s'engage à mettre à la disposition de QUATRIEME DIMENSION , un endroit entièrement protégé des intempéries, destiné à l'installation du matériel. En cas de non-respect de cette clause, par météorologie incertaine, QUATRIEME DIMENSION se verrait dégagé de son obligation d'exécuter la prestation, en revanche le client resterait tenu au paiement de la totalité de la somme telle qu'elle est prévue.</p>
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 6.</strong> Le client organisateur est responsable du matériel de QUATRIEME DIMENSION , en cas de destruction partielle par incendie, inondation, vandalisme, vol, ou tout autre accident qui ne relèverait pas de la responsabilité de QUATRIEME DIMENSION , et ce, à partir du moment ou le matériel est entreposé jusqu'au moment ou il est enlevé des lieux de la prestation.</p>
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 7.</strong> Lors de la prestation, en cas d’animation(s) supplémentaire(s) non consignée(s) dans le présent contrat, et réalisée(s) par QUATRIEME DIMENSION , suite à la demande du client organisateur (ou sous couvert de celui-ci ci, suite à la demande d’une tierce personne de l’assemblée), QUATRIEME DIMENSION se réserve le droit de réclamer à ce dernier un supplément tarifaire qui viendra s’ajouter au solde restant dû.</p>
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 8.</strong> L’ORGANISATEUR en sa qualité d’EMPLOYEUR doit également prévoir un repas pour chaque membres de l'association ainsi que des boissons dès leur arrivée jusqu’à leur départ.</p>
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 9.</strong> L’ORGANISATEUR en sa qualité d’EMPLOYEUR doit également prévoir des barrières de sécurité en nombre suffisant et devra assurer la surveillance des installations et du matériel durant l’absence des membres de l'association.</p>
+                            <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 10.</strong> QUATRIEME DIMENSION a souscrit une assurance R.C n°180479/Y Contrat N°6010-1 auprès de la SMACL Assurance.</p>
+                            
+                            <p class="text-[7px] text-slate-400 italic mt-2 border-t border-slate-100 pt-2">
+                                (1) En cas d’évènement se déroulant en extérieur, selon la loi, les intempéries, (hors circonstances exceptionnelles : inondations, cyclones, ouragans) ne font pas partie des cas de force majeure.
+                            </p>
+                        </div>
+
+                        <!-- BLOC DISPOSITIONS DIVERSES (ORANGE VOYANT ET FIXE) -->
+                        <div class="mt-4 p-3 rounded-lg text-xs shadow-sm" style="background-color: #fff7ed !important; border: 2px solid #f97316 !important;">
+                            <p class="uppercase mb-1 font-black tracking-widest text-[9px] flex items-center gap-1" style="color: #c2410c !important;">
+                                <i data-lucide="alert-triangle" class="w-3 h-3"></i> Dispositions de base & Spécifiques
+                            </p>
+                            <div class="font-bold leading-tight text-[9.5px]" style="color: #9a3412 !important;">
+                                <p>• Les repas et les boissons sont à la charge de l'organisateur pendant toute la durée de la prestation.</p>
+                                ${data.extraConditions ? `<p class="mt-1">• ${data.extraConditions.replace(/\n/g, '<br>• ')}</p>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- RETOUR ET SIGNATURES -->
+                        <div class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[9px] text-slate-800 text-center font-bold">
+                            Document à renvoyer signé ("Lu et approuvé" + signature) à : <br>
+                            <span class="text-blue-600">4eme.dimension46@gmail.com</span> OU <span class="text-blue-600">Vermande Thomas 23 cote de deze 15600 Saint etienne de MAURS</span>
+                        </div>
+
+                        <!-- BLOC SIGNATURES ALLÉGÉ (h-32 = moins haut) -->
+                        <div class="mt-4 grid grid-cols-2 gap-6">
+                            <div class="border border-slate-300 rounded-xl p-4 h-32 flex flex-col justify-between bg-white relative">
+                                <div><p class="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-1">Organisateur</p></div>
+                                <div class="absolute bottom-2 left-4 max-w-[120px] max-h-[70px] pointer-events-none">
+                                    ${data.clientSignature ? `<img src="${data.clientSignature}" class="w-full h-full object-contain">` : ``}
+                                </div>
+                                <div class="text-[8px] text-slate-400 mt-auto border-t border-slate-100 pt-2 italic text-center">Fait à ................................., le ${data.signedAt ? new Date(data.signedAt).toLocaleDateString('fr-FR') : today}</div>
+                            </div>
+                            <div class="border border-blue-200 rounded-xl p-4 h-32 flex flex-col justify-between bg-blue-50/30 relative overflow-hidden">
+                                <div><p class="font-black text-[10px] uppercase tracking-widest text-blue-900 mb-1">Pour Quatrième Dimension</p><p class="text-xs font-black text-slate-800">Mr ${associationInfo.repName}</p></div>
+                                <div class="absolute bottom-2 right-4 max-w-[120px] max-h-[70px] pointer-events-none">
+                                    ${associationInfo.signature ? `<img src="${associationInfo.signature}" class="w-full h-full object-contain filter contrast-125">` : ``}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FOOTER -->
+                        <footer class="mt-6 pt-4 border-t border-slate-200 grid grid-cols-3 gap-4 items-center font-bold text-[8px] text-slate-500 uppercase tracking-tight">
+                            <div class="leading-tight">SIRET : ${associationInfo.siret}<br>${associationInfo.address}</div>
+                            <div class="text-center"><div class="text-blue-600 font-black text-sm italic leading-none tracking-tighter">Quatrième Dimension</div></div>
+                            <div class="text-right leading-tight">${associationInfo.email}<br>Resp : ${associationInfo.repName}</div>
+                        </footer>
+                        <div class="paraph-box">Initiales Organisateur (P2) :</div>
+                    </div>
+                </div>
+            `;
+        };
+
         const renderClientSign = (data) => {
             const container = document.createElement('div');
             container.className = "animate-in fade-in";
@@ -865,20 +1061,30 @@
             const isSigned = !!data.clientSignature;
 
             container.innerHTML = `
-                <div class="max-w-3xl mx-auto bg-white p-6 md:p-10 rounded-3xl shadow-2xl mt-4 md:mt-8">
+                <div class="max-w-4xl mx-auto bg-white p-4 md:p-10 rounded-3xl shadow-2xl mt-4 md:mt-8">
                     <div class="text-center mb-8">
                         <img src="${associationInfo.logo || FALLBACK_LOGO}" class="w-24 h-24 mx-auto mb-4 object-contain">
                         <h2 class="text-2xl font-black text-slate-900 leading-tight">Validation de votre contrat</h2>
                         <p class="text-slate-500 mt-2">Événement de ${data.clientName}</p>
                     </div>
                     
-                    <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 mb-8 space-y-4 shadow-inner">
-                        <p class="font-bold text-slate-800 border-b border-slate-200 pb-2 uppercase tracking-wider text-xs"><i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i> Récapitulatif</p>
-                        <div class="grid grid-cols-2 gap-6 text-sm">
-                            <div><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-widest">Prestation</span><span class="font-bold text-slate-800">${data.eventNature}</span></div>
-                            <div><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-widest">Date</span><span class="font-black text-blue-600">${data.eventDate ? new Date(data.eventDate).toLocaleDateString('fr-FR') : '-'}</span></div>
-                            <div class="col-span-2"><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-widest">Lieu</span><span class="font-bold text-slate-800">${data.eventLocation || '-'}</span></div>
-                            <div class="col-span-2 border-t border-slate-200 pt-4"><span class="text-slate-400 block text-[10px] uppercase font-bold tracking-widest">Montant Total Convenu</span><span class="text-2xl font-black text-slate-900">${data.totalPrice} € TTC</span></div>
+                    <!-- LECTURE OBLIGATOIRE DU CONTRAT -->
+                    <div class="mb-8">
+                        <div class="bg-blue-50/80 border border-blue-200 text-blue-900 p-4 rounded-2xl mb-4 text-sm font-medium flex items-start gap-3 shadow-sm">
+                            <i data-lucide="file-search" class="w-6 h-6 flex-shrink-0 text-blue-600 mt-0.5"></i>
+                            <div>
+                                <p class="font-bold mb-1">Lecture du document finalisée</p>
+                                <p class="text-blue-700/80 text-xs">Veuillez prendre connaissance de l'intégralité de ce contrat (2 pages) avant de procéder à la signature au bas de l'écran. Vous pouvez faire défiler le document horizontalement et verticalement.</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Zone de Scroll pour le document -->
+                        <div class="w-full max-h-[60vh] overflow-auto custom-scrollbar bg-slate-200 rounded-2xl border-2 border-slate-300 p-2 md:p-4 shadow-inner relative group">
+                            <div class="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-800/80 text-white text-[10px] font-bold px-4 py-1.5 rounded-full flex items-center gap-2 z-10 pointer-events-none xl:hidden shadow-lg backdrop-blur-sm opacity-80 group-hover:opacity-10 transition-opacity">
+                                <i data-lucide="move" class="w-3 h-3"></i> Naviguez dans le document
+                            </div>
+                            <!-- Injection du composant Contrat Identique à celui généré en PDF -->
+                            ${generateContractDocument(data)}
                         </div>
                     </div>
 
@@ -887,15 +1093,15 @@
                             <div class="w-16 h-16 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg"><i data-lucide="check" class="w-8 h-8"></i></div>
                             <h3 class="text-xl font-black text-emerald-800 mb-2">Contrat signé !</h3>
                             <p class="text-emerald-700 text-sm">Merci, votre signature a bien été enregistrée le ${new Date(data.signedAt).toLocaleDateString('fr-FR')}. Vous pouvez quitter cette page.</p>
-                            <div class="mt-6 p-4 bg-white rounded-xl border border-emerald-100 inline-block">
-                                <span class="text-[10px] uppercase text-emerald-300 font-bold mb-2 block">Votre signature</span>
+                            <div class="mt-6 p-4 bg-white rounded-xl border border-emerald-100 inline-block shadow-inner">
+                                <span class="text-[10px] uppercase text-emerald-400 font-bold mb-2 block tracking-widest">Votre signature</span>
                                 <img src="${data.clientSignature}" class="max-h-24 mx-auto object-contain">
                             </div>
                         </div>
                     ` : `
-                        <div class="border-2 border-blue-200 rounded-2xl p-6 md:p-8 bg-blue-50/50 shadow-sm">
+                        <div class="border-2 border-blue-200 rounded-2xl p-6 md:p-8 bg-blue-50/50 shadow-sm mt-10">
                             <h3 class="text-sm font-black text-blue-900 uppercase tracking-widest mb-2 flex items-center gap-2"><i data-lucide="pen-tool" class="w-5 h-5"></i> Zone de signature</h3>
-                            <p class="text-xs text-slate-600 mb-6 leading-relaxed">En signant ci-dessous, je reconnais avoir pris connaissance du devis et j'accepte les conditions générales du contrat.</p>
+                            <p class="text-xs text-slate-600 mb-6 leading-relaxed">En signant ci-dessous, je confirme avoir lu, compris et accepté sans réserve les conditions générales du contrat détaillées ci-dessus.</p>
                             
                             <div class="bg-white border-2 border-dashed border-slate-300 rounded-xl relative overflow-hidden mb-6 shadow-inner">
                                 <canvas id="signature-pad" class="w-full cursor-crosshair touch-none" style="height: 192px;"></canvas>
@@ -904,7 +1110,7 @@
                             
                             <div class="flex flex-col-reverse md:flex-row justify-between items-center gap-4">
                                 <button onclick="clearSignature()" class="w-full md:w-auto text-xs text-slate-500 hover:text-slate-800 font-bold px-4 py-3 rounded-xl hover:bg-slate-200 transition-colors">Effacer et recommencer</button>
-                                <button onclick="submitClientSignature()" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl transition-all transform hover:scale-105 flex items-center justify-center gap-2"><i data-lucide="check-circle-2" class="w-5 h-5"></i> Valider ma signature</button>
+                                <button onclick="submitClientSignature()" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl transition-all transform hover:scale-105 flex items-center justify-center gap-2"><i data-lucide="check-circle-2" class="w-5 h-5"></i> J'accepte et je signe</button>
                             </div>
                         </div>
                     `}
@@ -1445,12 +1651,6 @@
         const renderPreview = (data) => {
             const container = document.createElement('div');
             container.className = "contract-view animate-in fade-in no-print-bg";
-            const today = new Date().toLocaleDateString('fr-FR');
-            const val = (v, fallback = "........................................") => v && v.trim() !== "" ? v : fallback;
-            const dateVal = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : "..../..../....";
-            const optionsToDisplay = data.selectedOptions || [];
-            
-            const currentLogo = associationInfo.logo || FALLBACK_LOGO;
             const dataStr = encodeURIComponent(JSON.stringify(data)).replace(/'/g, "\\'");
 
             container.innerHTML = `
@@ -1473,194 +1673,12 @@
                     </div>
                 </div>
                 
-                <!-- NOUVEAU WRAPPER POUR LE SCROLL MOBILE -->
                 <div class="no-print block lg:hidden text-center text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4 bg-slate-100 p-3 rounded-xl flex items-center justify-center gap-2 animate-pulse">
                     <i data-lucide="move-horizontal" class="w-4 h-4"></i> Faites glisser pour voir le document entier
                 </div>
 
                 <div class="w-full overflow-x-auto pb-8 custom-scrollbar">
-                    <div class="printable-container mx-auto bg-white shadow-xl rounded-xl overflow-hidden" style="width: 210mm; min-width: 210mm; position: relative;">
-                        
-                        <!-- ============================================== -->
-                        <!-- PAGE 1 : ENGAGEMENT                            -->
-                        <!-- ============================================== -->
-                        <div class="page relative flex flex-col">
-                            <div class="absolute top-0 left-0 w-full h-2 bg-blue-600 print-header-bar"></div>
-                            
-                            <!-- EN-TÊTE -->
-                            <div class="flex justify-between items-start mb-6 border-b-2 border-slate-100 pb-4 mt-2">
-                                <div class="w-32 h-32 flex items-center justify-center bg-white p-2">
-                                    <img src="${currentLogo}" class="max-w-full max-h-full object-contain">
-                                </div>
-                                <div class="text-right">
-                                    <h1 class="text-4xl font-black uppercase text-slate-900 tracking-tighter mb-1">Contrat de Prestation</h1>
-                                    <p class="text-blue-600 font-bold uppercase text-lg tracking-widest mb-4">Engagement</p>
-                                    <div class="text-right flex flex-col items-end gap-1 mt-2">
-                                        <span class="bg-slate-100 px-3 py-1 rounded text-[10px] font-mono font-bold text-slate-700">RÉF : ${data.id ? data.id.substring(0,8).toUpperCase() : 'NOUVEAU'}</span>
-                                        <span class="text-[10px] font-bold text-slate-400 uppercase">Édité le ${today}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 1. INFORMATIONS CLIENT -->
-                            <div class="mb-5">
-                                <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">1. Informations Client</h3>
-                                <div class="grid grid-cols-2 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-200">
-                                    <div>
-                                        <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Organisateur / Société</span>
-                                        <span class="text-lg font-black text-slate-900 block leading-none mb-1">${val(data.clientName)}</span>
-                                        ${data.clientOrg ? `<span class="text-xs font-bold text-blue-700 block mb-2">${data.clientOrg}</span>` : ''}
-                                        
-                                        <span class="text-[9px] uppercase font-black text-slate-400 block mt-3 mb-1">Adresse</span>
-                                        <p class="text-xs text-slate-700 font-medium leading-snug">${val(data.clientAddress)}<br><span class="font-bold text-slate-900">${val(data.clientZip, "....")} ${val(data.clientCity)}</span></p>
-                                    </div>
-                                    <div>
-                                        <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Contact Téléphonique</span>
-                                        <p class="text-sm font-bold text-slate-900 mb-3">${val(data.clientTel)}</p>
-                                        <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Contact Email</span>
-                                        <p class="text-sm font-bold text-slate-900">${val(data.clientEmail)}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 2. DÉTAILS ÉVÉNEMENT -->
-                            <div class="mb-5">
-                                <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">2. Détails de l'Événement</h3>
-                                <div class="grid grid-cols-3 gap-y-3 gap-x-6 border border-slate-200 p-4 rounded-xl bg-white">
-                                    <div class="col-span-2">
-                                        <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Nature de l'événement</span>
-                                        <span class="text-base font-black text-slate-900">${val(data.eventNature)}</span>
-                                    </div>
-                                    <div>
-                                        <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Date prévue</span>
-                                        <span class="text-base font-black text-blue-700">${dateVal(data.eventDate)}</span>
-                                    </div>
-                                    <div class="col-span-2">
-                                        <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Lieu de la prestation</span>
-                                        <span class="text-xs text-slate-800 font-medium leading-snug">${val(data.eventLocation)}</span>
-                                    </div>
-                                    <div>
-                                        <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Nombre de convives</span>
-                                        <span class="text-sm font-bold text-slate-900">${data.eventGuests || "Non précisé"}</span>
-                                    </div>
-                                    <div class="col-span-3 mt-2 flex gap-4 pt-3 border-t border-slate-100">
-                                        <div class="flex-1 bg-slate-50 p-2 rounded-lg text-center border border-slate-200">
-                                            <span class="text-[8px] uppercase font-black text-slate-500 block mb-1">Arrivée 4D</span>
-                                            <span class="text-sm font-black text-slate-800">${val(data.timeArrival, "..:..")}</span>
-                                        </div>
-                                        <div class="flex-1 bg-blue-50 p-2 rounded-lg text-center border border-blue-200">
-                                            <span class="text-[8px] uppercase font-black text-blue-600 block mb-1">Début Soirée</span>
-                                            <span class="text-sm font-black text-blue-900">${val(data.timeStart, "..:..")}</span>
-                                        </div>
-                                        <div class="flex-1 bg-slate-50 p-2 rounded-lg text-center border border-slate-200">
-                                            <span class="text-[8px] uppercase font-black text-slate-500 block mb-1">Fin estimée</span>
-                                            <span class="text-sm font-black text-slate-800">${val(data.timeEnd, "..:..")}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 3. PRESTATIONS & PRIX -->
-                            <div>
-                                <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">3. Prestations & Facturation</h3>
-                                <div class="grid grid-cols-2 gap-6 items-start">
-                                    <div class="space-y-2">
-                                        <span class="text-[9px] uppercase font-black text-slate-400 block mb-2">Prestations Incluses</span>
-                                        ${optionsToDisplay.length > 0 ? optionsToDisplay.map(opt => `
-                                            <div class="flex items-center gap-2 text-xs font-bold text-slate-800 border-b border-slate-50 pb-1.5">
-                                                <i data-lucide="check-square" class="w-4 h-4 text-blue-600"></i> ${opt}
-                                            </div>
-                                        `).join('') : '<span class="text-xs text-slate-500 italic">Aucune option sélectionnée.</span>'}
-                                    </div>
-                                    <div class="bg-slate-900 text-white p-5 rounded-2xl flex flex-col items-end text-right border-4 border-blue-600 relative">
-                                        <p class="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Rémunération Forfaitaire</p>
-                                        <div class="flex items-baseline gap-2">
-                                            <p class="text-5xl font-black tracking-tighter">${data.totalPrice || "........"}</p>
-                                            <p class="text-2xl font-bold text-blue-400">€ <span class="text-xs font-normal opacity-60">TTC</span></p>
-                                        </div>
-                                        <div class="mt-2 text-[8px] text-slate-400 italic opacity-80 leading-tight">
-                                            Association non assujettie à la TVA (Article 293B du CGI).
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="paraph-box">Initiales Organisateur (P1) :</div>
-                        </div>
-
-                        <!-- ============================================== -->
-                        <!-- PAGE 2 : CONDITIONS                            -->
-                        <!-- ============================================== -->
-                        <div class="page relative flex flex-col break-before">
-                            <div class="absolute top-0 left-0 w-full h-1 bg-blue-600"></div>
-                            
-                            <div class="mb-4 text-center mt-2">
-                                <h2 class="inline-block px-10 py-2 border-b-4 border-blue-600 text-sm font-black uppercase tracking-[0.4em] text-slate-900">Conditions Contractuelles</h2>
-                            </div>
-                            
-                            <p class="text-[9px] font-bold text-slate-800 mb-4 px-2 italic text-center">Par le présent contrat, les deux parties s’engagent à respecter scrupuleusement les clauses suivantes :</p>
-
-                            <!-- ARTICLES ÉPURÉS ET PLUS LISIBLES -->
-                            <div class="text-[10px] text-slate-800 space-y-2.5 text-justify leading-snug px-2 flex-1">
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 1.</strong> En cas de désistement du client, ce dernier s’engage à en avertir QUATRIEME DIMENSION, par courrier, 30 jours avant la date de la prestation convenue initialement.</p>
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 2.</strong> En cas de désistement de QUATRIEME DIMENSION, pour une raison quelconque, QUATRIEME DIMENSION s’engage à en avertir le client, par courrier, 30 jours avant la date de l’évènement.</p>
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 3.</strong> Tout engagement fixé entre les deux parties par le présent contrat sera considéré comme ferme et définitif dès 30 jours avant la date de réalisation de la prestation. Passé ce délai, seul le cas de force majeure(1) tel qu’il est prévu par la loi, pourra annuler la prestation, sans préjudice de tous autres dommages et intérêts, et quelle que soit la partie défaillante. Si, en revanche, le cas de force majeure n’était pas avéré, en cas de désistement du client sous 30 jours avant la date de l’évènement, le client organisateur resterait tenu au paiement de la totalité du montant de la prestation fixé dans le présent contrat.</p>
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 4.</strong> Le client s'engage à réserver à QUATRIEME DIMENSION l'utilisation exclusive d'une surface nécessairement suffisante à l'installation du matériel et d’une puissance électrique nécessaire pour le fonctionnement des appareils. En cas de non-respect de cette clause QUATRIEME DIMENSION se verrait dégagé de son obligation d'exécuter la prestation, en revanche le client resterait tenu au paiement de la totalité de la somme telle qu'elle est prévue.</p>
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 5.</strong> Dans l'hypothèse d'une soirée extérieure, le client s'engage à mettre à la disposition de QUATRIEME DIMENSION , un endroit entièrement protégé des intempéries, destiné à l'installation du matériel. En cas de non-respect de cette clause, par météorologie incertaine, QUATRIEME DIMENSION se verrait dégagé de son obligation d'exécuter la prestation, en revanche le client resterait tenu au paiement de la totalité de la somme telle qu'elle est prévue.</p>
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 6.</strong> Le client organisateur est responsable du matériel de QUATRIEME DIMENSION , en cas de destruction partielle par incendie, inondation, vandalisme, vol, ou tout autre accident qui ne relèverait pas de la responsabilité de QUATRIEME DIMENSION , et ce, à partir du moment ou le matériel est entreposé jusqu'au moment ou il est enlevé des lieux de la prestation.</p>
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 7.</strong> Lors de la prestation, en cas d’animation(s) supplémentaire(s) non consignée(s) dans le présent contrat, et réalisée(s) par QUATRIEME DIMENSION , suite à la demande du client organisateur (ou sous couvert de celui-ci ci, suite à la demande d’une tierce personne de l’assemblée), QUATRIEME DIMENSION se réserve le droit de réclamer à ce dernier un supplément tarifaire qui viendra s’ajouter au solde restant dû.</p>
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 8.</strong> L’ORGANISATEUR en sa qualité d’EMPLOYEUR doit également prévoir un repas pour chaque membres de l'association ainsi que des boissons dès leur arrivée jusqu’à leur départ.</p>
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 9.</strong> L’ORGANISATEUR en sa qualité d’EMPLOYEUR doit également prévoir des barrières de sécurité en nombre suffisant et devra assurer la surveillance des installations et du matériel durant l’absence des membres de l'association.</p>
-                                <p><strong class="text-slate-900 uppercase text-[9px] tracking-wider">Article 10.</strong> QUATRIEME DIMENSION a souscrit une assurance R.C n°180479/Y Contrat N°6010-1 auprès de la SMACL Assurance.</p>
-                                
-                                <p class="text-[7px] text-slate-400 italic mt-2 border-t border-slate-100 pt-2">
-                                    (1) En cas d’évènement se déroulant en extérieur, selon la loi, les intempéries, (hors circonstances exceptionnelles : inondations, cyclones, ouragans) ne font pas partie des cas de force majeure.
-                                </p>
-                            </div>
-
-                            <!-- BLOC DISPOSITIONS DIVERSES (ORANGE VOYANT ET FIXE) -->
-                            <div class="mt-4 p-3 rounded-lg text-xs shadow-sm" style="background-color: #fff7ed !important; border: 2px solid #f97316 !important;">
-                                <p class="uppercase mb-1 font-black tracking-widest text-[9px] flex items-center gap-1" style="color: #c2410c !important;">
-                                    <i data-lucide="alert-triangle" class="w-3 h-3"></i> Dispositions de base & Spécifiques
-                                </p>
-                                <div class="font-bold leading-tight text-[9.5px]" style="color: #9a3412 !important;">
-                                    <p>• Les repas et les boissons sont à la charge de l'organisateur pendant toute la durée de la prestation.</p>
-                                    ${data.extraConditions ? `<p class="mt-1">• ${data.extraConditions.replace(/\n/g, '<br>• ')}</p>` : ''}
-                                </div>
-                            </div>
-
-                            <!-- RETOUR ET SIGNATURES -->
-                            <div class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[9px] text-slate-800 text-center font-bold">
-                                Document à renvoyer signé ("Lu et approuvé" + signature) à : <br>
-                                <span class="text-blue-600">4eme.dimension46@gmail.com</span> OU <span class="text-blue-600">Vermande Thomas 23 cote de deze 15600 Saint etienne de MAURS</span>
-                            </div>
-
-                            <!-- BLOC SIGNATURES ALLÉGÉ (h-32 = moins haut) -->
-                            <div class="mt-4 grid grid-cols-2 gap-6">
-                                <div class="border border-slate-300 rounded-xl p-4 h-32 flex flex-col justify-between bg-white relative">
-                                    <div><p class="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-1">Organisateur</p></div>
-                                    <div class="absolute bottom-2 left-4 max-w-[120px] max-h-[70px] pointer-events-none">
-                                        ${data.clientSignature ? `<img src="${data.clientSignature}" class="w-full h-full object-contain">` : ``}
-                                    </div>
-                                    <div class="text-[8px] text-slate-400 mt-auto border-t border-slate-100 pt-2 italic text-center">Fait à ................................., le ${data.signedAt ? new Date(data.signedAt).toLocaleDateString('fr-FR') : today}</div>
-                                </div>
-                                <div class="border border-blue-200 rounded-xl p-4 h-32 flex flex-col justify-between bg-blue-50/30 relative overflow-hidden">
-                                    <div><p class="font-black text-[10px] uppercase tracking-widest text-blue-900 mb-1">Pour Quatrième Dimension</p><p class="text-xs font-black text-slate-800">Mr ${associationInfo.repName}</p></div>
-                                    <div class="absolute bottom-2 right-4 max-w-[120px] max-h-[70px] pointer-events-none">
-                                        ${associationInfo.signature ? `<img src="${associationInfo.signature}" class="w-full h-full object-contain filter contrast-125">` : ``}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- FOOTER -->
-                            <footer class="mt-6 pt-4 border-t border-slate-200 grid grid-cols-3 gap-4 items-center font-bold text-[8px] text-slate-500 uppercase tracking-tight">
-                                <div class="leading-tight">SIRET : ${associationInfo.siret}<br>${associationInfo.address}</div>
-                                <div class="text-center"><div class="text-blue-600 font-black text-sm italic leading-none tracking-tighter">Quatrième Dimension</div></div>
-                                <div class="text-right leading-tight">${associationInfo.email}<br>Resp : ${associationInfo.repName}</div>
-                            </footer>
-                            <div class="paraph-box">Initiales Organisateur (P2) :</div>
-                        </div>
-                    </div>
+                    ${generateContractDocument(data)}
                 </div>
             `;
             setTimeout(() => lucide.createIcons(), 0);
@@ -1701,7 +1719,7 @@
         .animate-in { animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         
         /* SCROLLBAR PERSONNALISÉE POUR L'APERÇU MOBILE */
-        .custom-scrollbar::-webkit-scrollbar { height: 10px; }
+        .custom-scrollbar::-webkit-scrollbar { height: 10px; width: 10px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; margin: 0 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; border: 2px solid #f1f5f9; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
