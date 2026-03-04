@@ -549,18 +549,26 @@
         // MOTEUR PDF INVISIBLE - FIX BLANK PAGE ULTIME
         // ============================================
         const generatePDFElement = (data) => {
-            // 1. Le wrapper isole l'élément du viewport pour qu'il soit invisible
+            // 1. Le wrapper isole l'élément du viewport mais reste ancré en 0,0
             const wrapper = document.createElement('div');
             wrapper.style.position = "absolute";
-            wrapper.style.left = "-9999px";
-            wrapper.style.top = "0";
-
-            // 2. La cible ne contient AUCUN style absolu, donc html2pdf la clonant 
-            // la verra comme un élément parfaitement normal au centre de son iframe.
+            wrapper.style.left = "0px";
+            wrapper.style.top = "0px";
+            wrapper.style.zIndex = "-9999"; // Rendu en arrière plan, caché par le body
+            wrapper.style.width = "1024px"; // On fixe la largeur à la même taille que windowWidth
+            wrapper.style.overflow = "hidden"; // Empêche tout scroll induit
+            
+            // 2. Le conteneur cible
             const target = document.createElement('div');
             target.className = "printable-container"; 
             target.style.width = "210mm";
             target.style.backgroundColor = "white";
+            // CRITIQUE POUR LE CENTRAGE : On annule le `margin: 0 auto` de la classe CSS
+            // et on le verrouille totalement en haut à gauche.
+            target.style.margin = "0"; 
+            target.style.position = "absolute"; 
+            target.style.left = "0px";
+            target.style.top = "0px";
             target.innerHTML = getContractPages(data);
             
             wrapper.appendChild(target);
@@ -582,7 +590,8 @@
               margin:       0,
               filename:     `Contrat_Signe_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
               image:        { type: 'jpeg', quality: 0.98 },
-              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024 },
+              // scrollX et scrollY fixés à 0 garantissent que le décalage ne sera pas capturé
+              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024, scrollX: 0, scrollY: 0 },
               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
               pagebreak:    { mode: 'css', before: '.break-before' }
             };
@@ -647,12 +656,15 @@
             showNotification("Création du PDF et envoi en cours...", "success");
             
             const { wrapper, target } = generatePDFElement(data);
+            
+            // CORRECTION DU BUG : Création de la variable 'bodyText' qui manquait
+            const bodyText = buildEmailBody(data);
 
             const opt = {
               margin:       0,
               filename:     `Contrat_4D_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
               image:        { type: 'jpeg', quality: 0.98 },
-              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024 },
+              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024, scrollX: 0, scrollY: 0 },
               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
               pagebreak:    { mode: 'css', before: '.break-before' }
             };
@@ -661,55 +673,59 @@
                 html2pdf().set(opt).from(target).output('datauristring').then(function(pdfDataUri) {
                     if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
                     
+                    if (!pdfDataUri || !pdfDataUri.includes(',')) {
+                        throw new Error("Erreur lors de la capture du PDF.");
+                    }
+                    
                     const pdfBase64 = pdfDataUri.split(',')[1];
                     const boundary = "boundary_4D_" + Date.now().toString();
                     const subject = "Votre Contrat Prestation - Quatrième Dimension";
-                const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
+                    const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
 
-                let email = `To: ${data.clientEmail}\r\n`;
-                email += `Subject: ${utf8Subject}\r\n`;
-                email += `MIME-Version: 1.0\r\n`;
-                email += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
-                
-                email += `--${boundary}\r\n`;
-                email += `Content-Type: text/plain; charset="UTF-8"\r\n`;
-                email += `Content-Transfer-Encoding: 7bit\r\n\r\n`;
-                email += `${bodyText}\r\n\r\n`;
-                
-                email += `--${boundary}\r\n`;
-                email += `Content-Type: application/pdf; name="${opt.filename}"\r\n`;
-                email += `Content-Transfer-Encoding: base64\r\n`;
-                email += `Content-Disposition: attachment; filename="${opt.filename}"\r\n\r\n`;
-                
-                const formattedBase64 = pdfBase64.match(/.{1,76}/g).join('\r\n');
-                email += `${formattedBase64}\r\n\r\n`;
-                email += `--${boundary}--\r\n`;
+                    let email = `To: ${data.clientEmail}\r\n`;
+                    email += `Subject: ${utf8Subject}\r\n`;
+                    email += `MIME-Version: 1.0\r\n`;
+                    email += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+                    
+                    email += `--${boundary}\r\n`;
+                    email += `Content-Type: text/plain; charset="UTF-8"\r\n`;
+                    email += `Content-Transfer-Encoding: 7bit\r\n\r\n`;
+                    email += `${bodyText}\r\n\r\n`;
+                    
+                    email += `--${boundary}\r\n`;
+                    email += `Content-Type: application/pdf; name="${opt.filename}"\r\n`;
+                    email += `Content-Transfer-Encoding: base64\r\n`;
+                    email += `Content-Disposition: attachment; filename="${opt.filename}"\r\n\r\n`;
+                    
+                    const formattedBase64 = pdfBase64.match(/.{1,76}/g).join('\r\n');
+                    email += `${formattedBase64}\r\n\r\n`;
+                    email += `--${boundary}--\r\n`;
 
-                const base64EncodedEmail = btoa(unescape(encodeURIComponent(email)))
-                    .replace(/\+/g, '-')
-                    .replace(/\//g, '_')
-                    .replace(/=+$/, '');
+                    const base64EncodedEmail = btoa(unescape(encodeURIComponent(email)))
+                        .replace(/\+/g, '-')
+                        .replace(/\//g, '_')
+                        .replace(/=+$/, '');
 
-                gapi.load('client', () => {
-                    gapi.client.setToken({access_token: accessToken});
-                    gapi.client.load('gmail', 'v1', () => {
-                        gapi.client.gmail.users.messages.send({
-                            'userId': 'me',
-                            'resource': { 'raw': base64EncodedEmail }
-                        }).then((response) => {
-                            showNotification("L'email avec le contrat PDF a été envoyé avec succès !", "success");
-                            updateContractStatus(data.id, 'envoye');
-                        }).catch((err) => {
-                            console.error(err);
-                            showNotification("L'envoi a échoué. Vérifiez vos autorisations.", "error");
+                    gapi.load('client', () => {
+                        gapi.client.setToken({access_token: accessToken});
+                        gapi.client.load('gmail', 'v1', () => {
+                            gapi.client.gmail.users.messages.send({
+                                'userId': 'me',
+                                'resource': { 'raw': base64EncodedEmail }
+                            }).then((response) => {
+                                showNotification("L'email avec le contrat PDF a été envoyé avec succès !", "success");
+                                updateContractStatus(data.id, 'envoye');
+                            }).catch((err) => {
+                                console.error(err);
+                                showNotification("L'envoi a échoué. Vérifiez vos autorisations.", "error");
+                            });
                         });
                     });
+                }).catch(err => {
+                    if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
+                    console.error(err);
+                    showNotification("Erreur lors de la génération PDF.", "error");
                 });
-            }).catch(err => {
-                if(document.body.contains(wrapper)) document.body.removeChild(wrapper);
-                console.error(err);
-                showNotification("Erreur lors de la génération PDF.", "error");
-            });
             }, 500);
         };
 
@@ -796,7 +812,7 @@
               margin:       0,
               filename:     `Contrat_4D_${(data.clientName||'Client').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`,
               image:        { type: 'jpeg', quality: 0.98 },
-              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024 },
+              html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 1024, scrollX: 0, scrollY: 0 },
               jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
               pagebreak:    { mode: 'css', before: '.break-before' }
             };
