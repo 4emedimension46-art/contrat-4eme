@@ -25,8 +25,7 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // AJOUT : signInWithCustomToken nécessaire pour la compatibilité avec certains environnements
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDoc, addDoc, onSnapshot, query, orderBy, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Configuration Firebase
@@ -40,8 +39,7 @@
             measurementId: "G-1PK60YBFXM"
         };
 
-        // Gère le cas où l'app tourne dans un environnement qui injecte un appId
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'contrat-4eme-app';
+        const appId = 'contrat-4eme-app';
         
         const FALLBACK_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2' ry='2'/%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'/%3E%3Cpolyline points='21 15 16 10 5 21'/%3E%3C/svg%3E";
 
@@ -106,9 +104,7 @@
             }
         };
 
-        // Fallback pour configurer Firebase dans n'importe quel environnement
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : userFirebaseConfig;
-        const app = initializeApp(firebaseConfig);
+        const app = initializeApp(userFirebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
@@ -130,7 +126,6 @@
             logo: null,
             signature: null,
             googleClientId: "", 
-            lastDriveBackup: null,
             emailTemplate: "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nVous pouvez le signer électroniquement et de manière sécurisée en cliquant sur ce lien :\n{{SIGN_LINK}}\n\nCordialement,\nL'équipe Quatrième Dimension",
             prestationTypes: ["Mariage", "Anniversaire", "Soirée de gala", "Bal", "Baptême", "Comité des fêtes"],
             contractOptions: ["Animation DJ", "Jeux / Surprises", "Vidéo + Écran 3x2m", "Sonorisation"]
@@ -164,34 +159,12 @@
             }, 3000);
         };
 
-        // MODIFICATION MAJEURE : Amélioration de la gestion des erreurs de connexion Firebase
         const initAuth = async () => {
             try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                await signInAnonymously(auth);
             } catch (error) {
                 console.error("Erreur d'authentification Firebase:", error);
-                const appDiv = document.getElementById('app');
-                if (appDiv) {
-                    appDiv.innerHTML = `
-                        <div class="flex flex-col items-center justify-center min-h-screen px-4 text-center bg-slate-50">
-                            <div class="bg-white p-8 rounded-3xl shadow-xl border border-red-100 max-w-lg">
-                                <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <i data-lucide="alert-triangle" class="w-8 h-8"></i>
-                                </div>
-                                <h3 class="font-black text-2xl text-slate-800 mb-2">Erreur de connexion</h3>
-                                <p class="text-sm text-slate-500 mb-6">${error.message}</p>
-                                <div class="bg-slate-100 p-4 rounded-xl text-left text-xs font-medium text-slate-700">
-                                    <strong class="block text-slate-900 mb-1"><i data-lucide="info" class="w-4 h-4 inline mr-1 text-blue-600"></i>Solution la plus probable :</strong>
-                                    Si vous hébergez cette application vous-même, vous devez impérativement aller dans votre console Firebase > <b>Authentication</b> > <b>Sign-in method</b> et activer le fournisseur <b>Anonyme (Anonymous)</b>.
-                                </div>
-                            </div>
-                        </div>`;
-                    lucide.createIcons();
-                }
+                showNotification("Erreur de connexion à la base de données.", "error");
             }
         };
 
@@ -200,10 +173,7 @@
             if (u) {
                 initDataListeners();
             }
-            // Si on n'a pas pu se connecter, initAuth affiche déjà l'erreur, on ne fait pas de renderApp par dessus
-            if (u || document.getElementById('app').innerHTML.includes('animate-spin')) {
-                renderApp();
-            }
+            renderApp();
         });
 
         const initDataListeners = () => {
@@ -234,7 +204,7 @@
                         activeData = null;
                         renderApp();
                     }
-                }, (err) => console.error("Erreur SignMode:", err));
+                });
             } else {
                 const clientsRef = collection(db, 'artifacts', appId, 'public', 'data', 'clients');
                 onSnapshot(clientsRef, (snapshot) => {
@@ -435,15 +405,17 @@
         // NOM DE FICHIER DYNAMIQUE
         // ============================================
         const getContractFileName = (data) => {
+            // Récupérer et formater la date
             const dateStr = data.eventDate 
                 ? new Date(data.eventDate).toLocaleDateString('fr-FR').replace(/\//g, '-') 
                 : 'Date_a_definir';
             
+            // Nettoyer la nature de l'événement (retirer accents, caractères spéciaux, espaces)
             const natureStr = (data.eventNature || 'Prestation')
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-zA-Z0-9]/g, '_')
-                .replace(/_+/g, '_')
-                .replace(/^_|_$/g, '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Enlève les accents
+                .replace(/[^a-zA-Z0-9]/g, '_')                    // Garde que les lettres et chiffres
+                .replace(/_+/g, '_')                              // Retire les tirets bas multiples
+                .replace(/^_|_$/g, '')                            // Retire les tirets bas aux extrémités
                 .toUpperCase();
                 
             return `CONTRAT_${natureStr}_${dateStr}.pdf`;
@@ -562,85 +534,6 @@
                 element.classList.remove('pdf-mode');
                 console.error(err);
                 showNotification("Erreur lors de la génération PDF.", "error");
-            });
-        };
-
-        // ============================================
-        // SAUVEGARDE GOOGLE DRIVE
-        // ============================================
-        window.saveToGoogleDrive = async () => {
-            if (!associationInfo.googleClientId) {
-                showNotification("Veuillez configurer votre Google Client ID dans les paramètres.", "error");
-                return;
-            }
-
-            const dataToExport = {
-                associationInfo: associationInfo,
-                clients: clients,
-                contracts: contracts,
-                exportDate: new Date().toISOString()
-            };
-            const fileContent = JSON.stringify(dataToExport, null, 2);
-            const fileName = `sauvegarde_4emeDimension_${new Date().toISOString().split('T')[0]}.json`;
-
-            try {
-                const tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: associationInfo.googleClientId,
-                    scope: 'https://www.googleapis.com/auth/drive.file',
-                    callback: (tokenResponse) => {
-                        if (tokenResponse.error) {
-                            showNotification("Annulé ou erreur d'authentification Google.", "error");
-                            return;
-                        }
-                        uploadFileToDrive(fileContent, fileName, tokenResponse.access_token);
-                    },
-                });
-                tokenClient.requestAccessToken();
-            } catch (err) {
-                console.error("GAPI Init Error:", err);
-                showNotification("Impossible de charger les services Google.", "error");
-            }
-        };
-
-        const uploadFileToDrive = (content, filename, accessToken) => {
-            showNotification("Sauvegarde vers Google Drive en cours...", "success");
-
-            const fileMetadata = {
-                'name': filename,
-                'mimeType': 'application/json'
-            };
-
-            const boundary = '-------314159265358979323846';
-            const delimiter = "\r\n--" + boundary + "\r\n";
-            const close_delim = "\r\n--" + boundary + "--";
-
-            let multipartRequestBody =
-                delimiter +
-                'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-                JSON.stringify(fileMetadata) +
-                delimiter +
-                'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-                content +
-                close_delim;
-
-            gapi.load('client', () => {
-                gapi.client.setToken({access_token: accessToken});
-                gapi.client.request({
-                    'path': 'https://www.googleapis.com/upload/drive/v3/files',
-                    'method': 'POST',
-                    'params': {'uploadType': 'multipart'},
-                    'headers': {
-                        'Content-Type': 'multipart/related; boundary="' + boundary + '"'
-                    },
-                    'body': multipartRequestBody
-                }).then(async (response) => {
-                    showNotification("Sauvegarde Drive réussie !", "success");
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'association'), { lastDriveBackup: new Date().toISOString() }, { merge: true });
-                    if (currentView === 'dashboard' || currentView === 'settings') renderApp();
-                }).catch((err) => {
-                    console.error("Drive Upload Error:", err);
-                    showNotification("La sauvegarde a échoué. Vérifiez vos autorisations Drive.", "error");
-                });
             });
         };
 
@@ -1039,10 +932,7 @@
             main.className = "max-w-6xl mx-auto p-4 md:p-8 no-print-padding";
             
             if (!user) {
-                // S'il n'y a pas de message d'erreur déjà affiché par initAuth
-                if (!main.innerHTML.includes('Erreur')) {
-                    main.innerHTML = `<div class="flex flex-col items-center justify-center py-20 text-slate-400"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div><p>Connexion au serveur...</p></div>`;
-                }
+                main.innerHTML = `<div class="flex flex-col items-center justify-center py-20 text-slate-400"><div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div><p>Connexion au serveur...</p></div>`;
             } else if (signModeId) {
                 main.appendChild(renderClientSign(activeData));
                 setTimeout(() => window.initSignaturePad(), 100);
@@ -1353,30 +1243,6 @@
             const signed = active.filter(c => c.status === 'signe').length;
             const paid = active.filter(c => c.status === 'paye').length;
 
-            // Vérification de la date de dernière sauvegarde Drive
-            let backupWarning = '';
-            if (associationInfo.googleClientId) {
-                const lastBackup = associationInfo.lastDriveBackup ? new Date(associationInfo.lastDriveBackup) : null;
-                const daysSinceBackup = lastBackup ? Math.floor((new Date() - lastBackup) / (1000 * 60 * 60 * 24)) : 999;
-                
-                if (daysSinceBackup >= 7) {
-                    backupWarning = `
-                        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 shadow-sm">
-                            <div class="flex items-center gap-3 text-amber-800">
-                                <div class="bg-amber-100 p-2 rounded-full"><i data-lucide="alert-triangle" class="w-5 h-5"></i></div>
-                                <div>
-                                    <p class="font-bold text-sm">Sauvegarde Drive recommandée</p>
-                                    <p class="text-xs text-amber-700/80">${lastBackup ? `Votre dernière sauvegarde remonte à ${daysSinceBackup} jours.` : 'Aucune sauvegarde Google Drive n\\'a été effectuée récemment.'}</p>
-                                </div>
-                            </div>
-                            <button onclick="saveToGoogleDrive()" class="whitespace-nowrap bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-md transition-all flex items-center gap-2">
-                                <i data-lucide="cloud-upload" class="w-4 h-4"></i> Sauvegarder
-                            </button>
-                        </div>
-                    `;
-                }
-            }
-
             div.innerHTML = `
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                     <div>
@@ -1387,8 +1253,6 @@
                         <i data-lucide="pen-tool" class="w-5 h-5"></i> Créer un contrat
                     </button>
                 </div>
-
-                ${backupWarning}
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                     <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col hover:border-blue-300 transition-all cursor-default">
@@ -1420,7 +1284,7 @@
                     </div>
                     <div class="divide-y divide-slate-100">
                         ${active.slice(0, 5).map(c => `
-                            <div class="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-blue-50/50 transition-colors cursor-pointer group" onclick="setView('preview', JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(c)).replace(/'/g, "%27")}')))">
+                            <div class="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-blue-50/50 transition-colors cursor-pointer group" onclick='setView("preview", ${JSON.stringify(c).replace(/'/g, "&apos;")})'>
                                 <div class="flex items-center gap-4">
                                     <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                                         <i data-lucide="file-text" class="w-5 h-5"></i>
@@ -1622,7 +1486,7 @@
                                             
                                             <!-- BOUTONS D'ACTION -->
                                             <div class="flex flex-wrap gap-2 w-full md:w-auto justify-end mt-2 md:mt-0">
-                                                <button onclick="setView('preview', JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(c)).replace(/'/g, "%27")}')))" class="flex-1 md:flex-none px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-blue-600 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95">
+                                                <button onclick='setView("preview", ${JSON.stringify(c).replace(/'/g, "&apos;")})' class="flex-1 md:flex-none px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-blue-600 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95">
                                                     <i data-lucide="file-text" class="w-4 h-4"></i> Consulter
                                                 </button>
                                                 ${c.clientSignature ? `
@@ -1715,7 +1579,7 @@
                                             
                                             <!-- BOUTONS D'ACTION ARCHIVES -->
                                             <div class="flex flex-wrap gap-2 w-full md:w-auto justify-end mt-2 md:mt-0">
-                                                <button onclick="setView('preview', JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(c)).replace(/'/g, "%27")}')))" class="flex-1 md:flex-none px-4 py-2.5 bg-slate-800 text-white rounded-xl hover:bg-slate-700 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95">
+                                                <button onclick='setView("preview", ${JSON.stringify(c).replace(/'/g, "&apos;")})' class="flex-1 md:flex-none px-4 py-2.5 bg-slate-800 text-white rounded-xl hover:bg-slate-700 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95">
                                                     <i data-lucide="file-text" class="w-4 h-4"></i> Consulter
                                                 </button>
                                                 ${c.clientSignature ? `
@@ -1771,7 +1635,7 @@
                             
                             <!-- ACTIONS CLIENTS CLAIRES -->
                             <div class="grid grid-cols-2 gap-3 mt-8 pt-6 border-t">
-                                <button onclick="setView('client-edit', JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(c)).replace(/'/g, "%27")}')))" class="flex items-center justify-center gap-2 py-3.5 bg-blue-50 text-blue-700 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm">
+                                <button onclick='setView("client-edit", ${JSON.stringify(c).replace(/'/g, "&apos;")})' class="flex items-center justify-center gap-2 py-3.5 bg-blue-50 text-blue-700 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm">
                                     <i data-lucide="edit-2" class="w-4 h-4"></i> Modifier
                                 </button>
                                 <button onclick="deleteClient('${c.id}')" class="flex items-center justify-center gap-2 py-3.5 bg-red-50 text-red-700 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-sm">
@@ -1826,10 +1690,17 @@
                             <div><label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">SIRET</label><input type="text" name="siret" value="${associationInfo.siret}" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700"></div>
                             
                             <div class="md:col-span-2 pt-4 border-t border-slate-100">
-                                <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"><i data-lucide="key" class="text-blue-600 w-4 h-4"></i> Intégration Google (Gmail & Drive)</h3>
-                                <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Google Client ID (Pour envoi auto & Sauvegarde)</label>
+                                <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"><i data-lucide="mail" class="text-blue-600 w-4 h-4"></i> Modèle d'Email</h3>
+                                <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Message par défaut pour l'envoi de contrat</label>
+                                <textarea name="emailTemplate" class="w-full border-2 border-slate-100 rounded-2xl p-4 h-32 text-sm outline-none focus:border-blue-500 transition-all font-medium text-slate-700">${associationInfo.emailTemplate || ''}</textarea>
+                                <p class="text-[9px] text-slate-400 mt-1 italic">Variables disponibles : <span class="font-bold text-slate-600">{{CLIENT_NAME}}</span> (Nom du client), <span class="font-bold text-slate-600">{{EVENT_DATE}}</span> (Date), <span class="font-bold text-slate-600">{{SIGN_LINK}}</span> (Lien pour signer).</p>
+                            </div>
+
+                            <div class="md:col-span-2 pt-4 border-t border-slate-100">
+                                <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"><i data-lucide="key" class="text-blue-600 w-4 h-4"></i> Intégration Gmail API</h3>
+                                <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Google Client ID (Pour envoi direct)</label>
                                 <input type="text" name="googleClientId" value="${associationInfo.googleClientId || ''}" placeholder="xxxxxxxxxx.apps.googleusercontent.com" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 text-xs">
-                                <p class="text-[9px] text-slate-400 mt-1 italic">Nécessaire pour l'envoi direct d'emails et la sauvegarde Drive. À configurer depuis Google Cloud Console (Activez les APIs <strong>Gmail API</strong> et <strong>Google Drive API</strong>).</p>
+                                <p class="text-[9px] text-slate-400 mt-1 italic">Nécessaire uniquement si vous souhaitez utiliser le bouton "Envoi Auto". À configurer depuis Google Cloud Console avec l'URL de votre GitHub Pages.</p>
                             </div>
                         </div>
                         
@@ -1884,19 +1755,15 @@
                 <div class="bg-amber-50 rounded-3xl p-8 border border-amber-200 flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm">
                     <div>
                         <h3 class="text-lg font-black text-amber-900 uppercase tracking-widest mb-1 flex items-center gap-2"><i data-lucide="database" class="w-5 h-5"></i> Sauvegarde & Restauration</h3>
-                        <p class="text-xs text-amber-700 font-bold mb-2">Exportez ou restaurez l'ensemble de vos données (Clients, Contrats, Paramètres) au format JSON.</p>
-                        ${associationInfo.lastDriveBackup ? `<p class="text-[10px] text-amber-600 font-black uppercase tracking-widest"><i data-lucide="check-circle" class="w-3 h-3 inline"></i> Dernière sauvegarde Drive : ${new Date(associationInfo.lastDriveBackup).toLocaleDateString('fr-FR')} à ${new Date(associationInfo.lastDriveBackup).toLocaleTimeString('fr-FR').slice(0,5)}</p>` : ''}
+                        <p class="text-xs text-amber-700 font-bold">Exportez ou restaurez l'ensemble de vos données (Clients, Contrats, Paramètres) au format JSON.</p>
                     </div>
                     <div class="flex flex-wrap gap-3">
                         <input type="file" id="import-upload" accept=".json" class="hidden" onchange="importData(event)">
                         <button type="button" onclick="document.getElementById('import-upload').click()" class="bg-white border-2 border-amber-200 text-amber-700 hover:bg-amber-100 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-sm transition-all transform hover:scale-105 flex items-center gap-2 whitespace-nowrap">
                             <i data-lucide="upload"></i> Importer
                         </button>
-                        <button type="button" onclick="exportData()" class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all transform hover:scale-105 flex items-center gap-2 whitespace-nowrap">
-                            <i data-lucide="download"></i> PC
-                        </button>
-                        <button type="button" onclick="saveToGoogleDrive()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all transform hover:scale-105 flex items-center gap-2 whitespace-nowrap">
-                            <i data-lucide="cloud"></i> Drive
+                        <button type="button" onclick="exportData()" class="bg-amber-600 hover:bg-amber-700 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all transform hover:scale-105 flex items-center gap-3 whitespace-nowrap">
+                            <i data-lucide="download"></i> Exporter
                         </button>
                     </div>
                 </div>
