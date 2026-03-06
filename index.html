@@ -113,6 +113,9 @@
         const signModeId = urlParams.get('sign');
 
         let user = null;
+        let appUser = null; // Utilisateur connecté à l'application
+        let appUsers = [];  // Liste des utilisateurs dans Firebase
+        
         let clients = [];
         let contracts = [];
         let associationInfo = {
@@ -179,6 +182,13 @@
         const initDataListeners = () => {
             if (!user) return;
             
+            // Écoute des utilisateurs de l'application
+            const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'app_users');
+            onSnapshot(usersRef, (snapshot) => {
+                appUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderApp();
+            }, (err) => console.error("Erreur Users:", err));
+
             const assocRef = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'association');
             onSnapshot(assocRef, (docSnap) => {
                 if (docSnap.exists()) {
@@ -226,6 +236,92 @@
             currentView = view;
             activeData = data;
             renderApp();
+        };
+
+        // ============================================
+        // SYSTÈME DE CONNEXION / UTILISATEURS
+        // ============================================
+        window.hashPassword = async (password) => {
+            const msgBuffer = new TextEncoder().encode(password);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        };
+
+        window.handleAuth = async (e) => {
+            e.preventDefault();
+            const username = e.target.username.value.trim();
+            const password = e.target.password.value;
+            const hashedPassword = await hashPassword(password);
+
+            if (appUsers.length === 0) {
+                // Premier lancement : Création de l'administrateur
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'app_users'), {
+                        username: username,
+                        password: hashedPassword,
+                        role: 'admin'
+                    });
+                    appUser = { username, role: 'admin' };
+                    setView('dashboard');
+                    showNotification("Compte administrateur créé avec succès !");
+                } catch(err) {
+                    showNotification("Erreur lors de la création", "error");
+                }
+            } else {
+                // Connexion normale
+                const userFound = appUsers.find(u => u.username === username && u.password === hashedPassword);
+                if (userFound) {
+                    appUser = userFound;
+                    setView('dashboard');
+                    showNotification(`Bienvenue ${username} !`);
+                } else {
+                    showNotification("Identifiants incorrects.", "error");
+                }
+            }
+        };
+
+        window.logout = () => {
+            appUser = null;
+            renderApp();
+        };
+
+        window.addUser = async (e) => {
+            e.preventDefault();
+            const username = e.target.newUsername.value.trim();
+            const password = e.target.newPassword.value;
+            
+            if(appUsers.find(u => u.username.toLowerCase() === username.toLowerCase())) {
+                showNotification("Cet utilisateur existe déjà.", "error");
+                return;
+            }
+
+            const hashedPassword = await hashPassword(password);
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'app_users'), {
+                    username: username,
+                    password: hashedPassword,
+                    role: 'user'
+                });
+                showNotification("Utilisateur ajouté avec succès !");
+                e.target.reset();
+            } catch(err) {
+                showNotification("Erreur lors de l'ajout", "error");
+            }
+        };
+
+        window.deleteUser = async (userId, username) => {
+            if(appUser.username === username) {
+                showNotification("Vous ne pouvez pas supprimer votre propre compte.", "error");
+                return;
+            }
+            if(!confirm(`Êtes-vous sûr de vouloir révoquer l'accès à ${username} ?`)) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'app_users', userId));
+                showNotification("Accès supprimé.");
+            } catch(err) {
+                showNotification("Erreur de suppression", "error");
+            }
         };
 
         // ============================================
@@ -556,6 +652,7 @@
                 associationInfo: associationInfo,
                 clients: clients,
                 contracts: contracts,
+                appUsers: appUsers,
                 exportDate: new Date().toISOString()
             };
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
@@ -587,6 +684,17 @@
                     if (data.associationInfo) {
                         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'association'), data.associationInfo, { merge: true });
                         importCount++;
+                    }
+
+                    if (data.appUsers && Array.isArray(data.appUsers)) {
+                        for (const u of data.appUsers) {
+                            if (u.id) {
+                                const uData = { ...u };
+                                delete uData.id;
+                                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'app_users', u.id), uData, { merge: true });
+                                importCount++;
+                            }
+                        }
                     }
 
                     if (data.clients && Array.isArray(data.clients)) {
@@ -903,6 +1011,94 @@
             } catch (error) { showNotification("Erreur", "error"); }
         };
 
+        const renderLogin = () => {
+            const div = document.createElement('div');
+            div.className = "max-w-md mx-auto mt-10 md:mt-20 bg-white p-8 rounded-3xl shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-500";
+            
+            const isFirst = appUsers.length === 0;
+            
+            div.innerHTML = `
+                <div class="text-center mb-8">
+                    <div class="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600 shadow-inner">
+                        <i data-lucide="${isFirst ? 'shield-check' : 'lock'}" class="w-10 h-10"></i>
+                    </div>
+                    <h2 class="text-2xl font-black text-slate-900">${isFirst ? 'Créer l\'administrateur' : 'Connexion requise'}</h2>
+                    <p class="text-slate-500 text-sm mt-2">${isFirst ? 'Initialisez le compte principal pour sécuriser l\'accès à l\'application.' : 'Veuillez vous identifier pour accéder au gestionnaire de contrats.'}</p>
+                </div>
+                <form onsubmit="handleAuth(event)" class="space-y-6">
+                    <div>
+                        <label class="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Identifiant</label>
+                        <input type="text" name="username" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 bg-slate-50" required placeholder="Ex: admin">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Mot de passe</label>
+                        <input type="password" name="password" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 bg-slate-50" required placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-blue-700 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
+                        ${isFirst ? '<i data-lucide="user-plus"></i> Créer le compte' : '<i data-lucide="log-in"></i> Se connecter'}
+                    </button>
+                </form>
+            `;
+            return div;
+        };
+
+        const renderUserManagement = () => {
+            const div = document.createElement('div');
+            div.className = "space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto";
+            
+            div.innerHTML = `
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                    <div>
+                        <h2 class="text-3xl font-black text-slate-800 tracking-tight">Équipe & Accès</h2>
+                        <p class="text-slate-500 text-sm font-medium mt-1">Gérez les personnes autorisées à se connecter à l'application.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- LISTE DES UTILISATEURS -->
+                    <div class="lg:col-span-2 space-y-4">
+                        ${appUsers.map(u => `
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:border-blue-200 transition-colors">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 rounded-full ${u.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'} flex items-center justify-center shadow-inner">
+                                        <i data-lucide="${u.role === 'admin' ? 'shield-alert' : 'user'}" class="w-5 h-5"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-slate-800 text-lg">${u.username}</p>
+                                        <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">${u.role === 'admin' ? 'Administrateur' : 'Utilisateur'}</p>
+                                    </div>
+                                </div>
+                                ${appUser && appUser.username !== u.username ? `
+                                    <button onclick="deleteUser('${u.id}', '${u.username}')" class="p-3 text-red-400 hover:text-white hover:bg-red-500 rounded-xl transition-colors shadow-sm" title="Supprimer l'accès">
+                                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                                    </button>
+                                ` : `<span class="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">C'est vous</span>`}
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- AJOUTER UN UTILISATEUR -->
+                    <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-200 self-start">
+                        <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i data-lucide="user-plus" class="text-blue-600"></i> Nouvel accès</h3>
+                        <form onsubmit="addUser(event)" class="space-y-5">
+                            <div>
+                                <label class="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Identifiant</label>
+                                <input type="text" name="newUsername" class="w-full border-2 border-slate-100 rounded-xl p-3 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 bg-slate-50" required placeholder="Ex: thomas">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Mot de passe</label>
+                                <input type="password" name="newPassword" class="w-full border-2 border-slate-100 rounded-xl p-3 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 bg-slate-50" required placeholder="••••••••">
+                            </div>
+                            <button type="submit" class="w-full bg-slate-900 text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-black transition-all flex items-center justify-center gap-2 mt-4 active:scale-95">
+                                <i data-lucide="plus"></i> Ajouter l'utilisateur
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+            return div;
+        };
+
         const appContainer = document.getElementById('app');
         const renderApp = () => {
             appContainer.innerHTML = '';
@@ -914,27 +1110,42 @@
             const nav = document.createElement('nav');
             nav.className = "bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-50 no-print shadow-xl";
             
-            // Rendu de la barre de navigation (Différente si c'est le client qui signe ou l'admin)
+            // Rendu de la barre de navigation
             if (signModeId) {
+                // NAVIGATION CLIENT
                 nav.innerHTML = `
                     <div class="flex items-center gap-3 w-full justify-center">
                         <div class="bg-white w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"><img src="${associationInfo.logo || FALLBACK_LOGO}" alt="Logo" class="w-full h-full object-cover"></div>
                         <div><h1 class="font-bold leading-none">Quatrième Dimension</h1><p class="text-[10px] text-blue-300 uppercase mt-1">Validation de Contrat</p></div>
                     </div>
                 `;
+            } else if (!appUser) {
+                // NAVIGATION LOGIN
+                nav.innerHTML = `
+                    <div class="flex items-center gap-3 w-full justify-center">
+                        <div class="bg-white w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"><img src="${associationInfo.logo || FALLBACK_LOGO}" alt="Logo" class="w-full h-full object-cover"></div>
+                        <div><h1 class="font-bold leading-none">Quatrième Dimension</h1><p class="text-[10px] text-blue-300 uppercase mt-1">Espace Sécurisé</p></div>
+                    </div>
+                `;
             } else {
+                // NAVIGATION ADMIN
                 nav.innerHTML = `
                     <div class="flex items-center gap-3">
                         <div class="bg-white w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"><img src="${associationInfo.logo || FALLBACK_LOGO}" alt="4D" class="w-full h-full object-cover"></div>
                         <div><h1 class="font-bold leading-none hidden sm:block">Quatrième Dimension</h1><p class="text-[10px] text-blue-300 uppercase mt-1 hidden sm:block">Gestionnaire de Contrats</p></div>
                     </div>
-                    <div class="flex gap-2 md:gap-6 overflow-x-auto pb-1 sm:pb-0 items-center">
+                    <div class="flex gap-2 md:gap-6 overflow-x-auto pb-1 sm:pb-0 items-center flex-1 justify-end">
                         <button onclick="setView('dashboard')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'dashboard' ? 'text-blue-400' : ''}"><i data-lucide="layout-dashboard" class="w-5 h-5"></i> <span class="hidden md:inline">Accueil</span></button>
                         <button onclick="setView('new')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'new' ? 'text-blue-400' : ''}"><i data-lucide="plus-circle" class="w-5 h-5"></i> <span class="hidden md:inline">Nouveau</span></button>
                         <button onclick="setView('history')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'history' ? 'text-blue-400' : ''}"><i data-lucide="history" class="w-5 h-5"></i> <span class="hidden md:inline">Historique</span></button>
                         <button onclick="setView('archives')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'archives' ? 'text-blue-400' : ''}"><i data-lucide="archive" class="w-5 h-5"></i> <span class="hidden md:inline">Archives</span></button>
                         <button onclick="setView('clients')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'clients' ? 'text-blue-400' : ''}"><i data-lucide="users" class="w-5 h-5"></i> <span class="hidden md:inline">Clients</span></button>
+                        <button onclick="setView('users_management')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'users_management' ? 'text-blue-400' : ''}"><i data-lucide="shield" class="w-5 h-5"></i> <span class="hidden md:inline">Équipe</span></button>
                         <button onclick="setView('settings')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'settings' ? 'text-blue-400' : ''}"><i data-lucide="settings" class="w-5 h-5"></i> <span class="hidden md:inline">Paramètres</span></button>
+                        
+                        <div class="h-6 w-px bg-slate-700 mx-2 hidden md:block"></div>
+                        <button onclick="logout()" class="flex flex-col md:flex-row items-center gap-1 text-sm text-red-400 hover:text-red-300" title="Se déconnecter"><i data-lucide="log-out" class="w-5 h-5"></i> <span class="hidden md:inline">Quitter</span></button>
+                        
                         ${window.deferredPrompt ? `<button onclick="installPWA()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ml-2 shadow-lg"><i data-lucide="download" class="w-4 h-4"></i> <span class="hidden md:inline">Installer l'App</span></button>` : ''}
                     </div>
                 `;
@@ -949,6 +1160,8 @@
             } else if (signModeId) {
                 main.appendChild(renderClientSign(activeData));
                 setTimeout(() => window.initSignaturePad(), 100);
+            } else if (!appUser) {
+                main.appendChild(renderLogin());
             } else {
                 if (currentView === 'dashboard') main.appendChild(renderDashboard());
                 else if (currentView === 'new') main.appendChild(renderForm());
@@ -958,6 +1171,7 @@
                 else if (currentView === 'client-edit') main.appendChild(renderClientEdit(activeData));
                 else if (currentView === 'settings') main.appendChild(renderSettings());
                 else if (currentView === 'preview') main.appendChild(renderPreview(activeData));
+                else if (currentView === 'users_management') main.appendChild(renderUserManagement());
             }
             
             appContainer.appendChild(main);
