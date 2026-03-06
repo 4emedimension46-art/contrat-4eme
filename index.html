@@ -186,6 +186,25 @@
             const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'app_users');
             onSnapshot(usersRef, (snapshot) => {
                 appUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // === SYSTÈME DE SESSION PERSISTANTE ===
+                if (!appUser && !signModeId && appUsers.length > 0) {
+                    const savedSessionStr = localStorage.getItem('4D_session_user');
+                    if (savedSessionStr) {
+                        try {
+                            const savedSession = JSON.parse(savedSessionStr);
+                            const userFound = appUsers.find(u => u.username === savedSession.username && u.password === savedSession.password);
+                            if (userFound) {
+                                appUser = userFound;
+                            } else {
+                                // Session expirée, utilisateur supprimé ou mdp changé
+                                localStorage.removeItem('4D_session_user');
+                            }
+                        } catch(e) {}
+                    }
+                }
+                // ======================================
+
                 renderApp();
             }, (err) => console.error("Erreur Users:", err));
 
@@ -263,6 +282,9 @@
                         role: 'admin'
                     });
                     appUser = { username, role: 'admin' };
+                    // Sauvegarde dans le navigateur
+                    localStorage.setItem('4D_session_user', JSON.stringify({username: username, password: hashedPassword, role: 'admin'}));
+                    
                     setView('dashboard');
                     showNotification("Compte administrateur créé avec succès !");
                 } catch(err) {
@@ -273,6 +295,9 @@
                 const userFound = appUsers.find(u => u.username === username && u.password === hashedPassword);
                 if (userFound) {
                     appUser = userFound;
+                    // Sauvegarde dans le navigateur
+                    localStorage.setItem('4D_session_user', JSON.stringify({username: username, password: hashedPassword, role: userFound.role}));
+                    
                     setView('dashboard');
                     showNotification(`Bienvenue ${username} !`);
                 } else {
@@ -283,6 +308,7 @@
 
         window.logout = () => {
             appUser = null;
+            localStorage.removeItem('4D_session_user');
             renderApp();
         };
 
@@ -1032,11 +1058,11 @@
                 <form onsubmit="handleAuth(event)" class="space-y-6">
                     <div>
                         <label class="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Identifiant</label>
-                        <input type="text" name="username" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 bg-slate-50" required placeholder="Ex: admin">
+                        <input type="text" name="username" autocomplete="username" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 bg-slate-50" required placeholder="Ex: admin">
                     </div>
                     <div>
                         <label class="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Mot de passe</label>
-                        <input type="password" name="password" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 bg-slate-50" required placeholder="••••••••">
+                        <input type="password" name="password" autocomplete="current-password" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 bg-slate-50" required placeholder="••••••••">
                     </div>
                     <button type="submit" class="w-full bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-blue-700 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
                         ${isFirst ? '<i data-lucide="user-plus"></i> Créer le compte' : '<i data-lucide="log-in"></i> Se connecter'}
