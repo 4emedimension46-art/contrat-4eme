@@ -565,7 +565,7 @@
         // ============================================
         const buildEmailBody = (data) => {
             let template = associationInfo.emailTemplate || "Bonjour {{CLIENT_NAME}},\n\nVeuillez trouver en pièce jointe le contrat concernant votre événement du {{EVENT_DATE}}.\n\nVous pouvez le signer électroniquement et de manière sécurisée en cliquant sur ce lien :\n{{SIGN_LINK}}\n\nCordialement,\nL'équipe Quatrième Dimension";
-            let clientName = data.clientName || 'Client';
+            let clientName = data.clientOrg || data.clientName || 'Client';
             let eventDateStr = formatEventDates(data.eventDate, data.eventEndDate);
             let signLink = `${window.location.href.split('?')[0]}?sign=${data.id}`;
             return template.replace(/{{CLIENT_NAME}}/g, clientName).replace(/{{EVENT_DATE}}/g, eventDateStr).replace(/{{SIGN_LINK}}/g, signLink);
@@ -820,7 +820,7 @@
                 draftContract.clientCity = client.city || '';
                 draftContract.clientTel = client.tel || '';
                 draftContract.clientEmail = client.email || '';
-                showNotification(`Client ${client.name} chargé`);
+                showNotification(`Client ${client.org || client.name} chargé`);
             }
             isPickerOpen = false;
             renderApp(); 
@@ -843,7 +843,8 @@
             
             try {
                 if (!clientId || clientId === 'undefined') {
-                    const newSlug = data.name.toLowerCase().trim().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 10000);
+                    const baseName = data.org ? data.org : data.name;
+                    const newSlug = baseName.toLowerCase().trim().replace(/\s+/g, '-') + '-' + Math.floor(Math.random() * 10000);
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', newSlug), data);
                     showNotification("Client ajouté");
                 } else {
@@ -1023,8 +1024,11 @@
             data.createdAt = isEditingId ? (contracts.find(c => c.id === isEditingId)?.createdAt || new Date().toISOString()) : new Date().toISOString();
 
             try {
-                if (data.clientName) {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', data.clientName.toLowerCase().trim().replace(/\s+/g, '-')), {
+                if (data.clientName || data.clientOrg) {
+                    const clientIdentifier = data.clientOrg ? data.clientOrg : data.clientName;
+                    const slug = clientIdentifier.toLowerCase().trim().replace(/\s+/g, '-');
+
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'clients', slug), {
                         name: data.clientName, org: data.clientOrg, address: data.clientAddress, zip: data.clientZip, city: data.clientCity, tel: data.clientTel, email: data.clientEmail, lastActivity: new Date().toISOString()
                     }, { merge: true });
                 }
@@ -1173,7 +1177,7 @@
                         <button onclick="setView('new')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'new' ? 'text-blue-400' : ''}"><i data-lucide="plus-circle" class="w-5 h-5"></i> <span class="hidden md:inline">Nouveau</span></button>
                         <button onclick="setView('history')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'history' ? 'text-blue-400' : ''}"><i data-lucide="history" class="w-5 h-5"></i> <span class="hidden md:inline">Historique</span></button>
                         <button onclick="setView('archives')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'archives' ? 'text-blue-400' : ''}"><i data-lucide="archive" class="w-5 h-5"></i> <span class="hidden md:inline">Archives</span></button>
-                        <button onclick="setView('clients')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'clients' ? 'text-blue-400' : ''}"><i data-lucide="users" class="w-5 h-5"></i> <span class="hidden md:inline">Clients</span></button>
+                        <button onclick="setView('clients')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'clients' ? 'text-blue-400' : ''}"><i data-lucide="users" class="w-5 h-5"></i> <span class="hidden md:inline">Sociétés</span></button>
                         <button onclick="setView('users_management')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'users_management' ? 'text-blue-400' : ''}"><i data-lucide="shield" class="w-5 h-5"></i> <span class="hidden md:inline">Équipe</span></button>
                         <button onclick="setView('settings')" class="flex flex-col md:flex-row items-center gap-1 text-sm hover:text-blue-400 ${currentView === 'settings' ? 'text-blue-400' : ''}"><i data-lucide="settings" class="w-5 h-5"></i> <span class="hidden md:inline">Paramètres</span></button>
                         
@@ -1254,9 +1258,9 @@
                             <h3 class="text-xs font-black uppercase text-white bg-slate-900 inline-block px-3 py-1 mb-3 tracking-widest rounded-sm">1. Informations Client</h3>
                             <div class="grid grid-cols-2 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-200">
                                 <div>
-                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Organisateur / Société</span>
-                                    <span class="text-lg font-black text-slate-900 block leading-none mb-1">${val(data.clientName)}</span>
-                                    ${data.clientOrg ? `<span class="text-xs font-bold text-blue-700 block mb-2">${data.clientOrg}</span>` : ''}
+                                    <span class="text-[9px] uppercase font-black text-slate-400 block mb-1">Société / Organisateur</span>
+                                    <span class="text-lg font-black text-slate-900 block leading-none mb-1">${val(data.clientOrg || data.clientName)}</span>
+                                    ${data.clientOrg ? `<span class="text-xs font-bold text-blue-700 block mb-2">Contact : ${data.clientName}</span>` : ''}
                                     
                                     <span class="text-[9px] uppercase font-black text-slate-400 block mt-3 mb-1">Adresse</span>
                                     <p class="text-xs text-slate-700 font-medium leading-snug">${val(data.clientAddress)}<br><span class="font-bold text-slate-900">${val(data.clientZip, "....")} ${val(data.clientCity)}</span></p>
@@ -1392,7 +1396,7 @@
                         <!-- BLOC SIGNATURES ALLÉGÉ (h-32 = moins haut) -->
                         <div class="mt-4 grid grid-cols-2 gap-6">
                             <div class="border border-slate-300 rounded-xl p-4 h-32 flex flex-col justify-between bg-white relative">
-                                <div><p class="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-1">Organisateur</p></div>
+                                <div><p class="font-black text-[10px] uppercase tracking-widest text-slate-500 mb-1">Organisateur / Société</p></div>
                                 <div class="absolute bottom-2 left-4 max-w-[120px] max-h-[70px] pointer-events-none">
                                     ${data.clientSignature ? `<img src="${data.clientSignature}" class="w-full h-full object-contain">` : ``}
                                 </div>
@@ -1429,13 +1433,14 @@
 
             const isSigned = !!data.clientSignature;
             const dataStr = encodeURIComponent(JSON.stringify(data)).replace(/'/g, "\\'");
+            const eventOwner = data.clientOrg || data.clientName;
 
             container.innerHTML = `
                 <div class="max-w-4xl mx-auto bg-white p-4 md:p-10 rounded-3xl shadow-2xl mt-4 md:mt-8">
                     <div class="text-center mb-8">
                         <img src="${associationInfo.logo || FALLBACK_LOGO}" class="w-24 h-24 mx-auto mb-4 object-contain">
                         <h2 class="text-2xl font-black text-slate-900 leading-tight">Validation de votre contrat</h2>
-                        <p class="text-slate-500 mt-2">Événement de ${data.clientName}</p>
+                        <p class="text-slate-500 mt-2">Événement de ${eventOwner}</p>
                     </div>
                     
                     <!-- LECTURE OBLIGATOIRE DU CONTRAT -->
@@ -1558,7 +1563,7 @@
                                     </div>
                                     <div>
                                         <p class="font-bold text-base text-slate-800 group-hover:text-blue-700 transition-colors flex items-center gap-2">
-                                            ${c.clientName} 
+                                            ${c.clientOrg || c.clientName} 
                                             ${c.clientSignature ? '<i data-lucide="pen-tool" class="w-3 h-3 text-emerald-500" title="Signé électroniquement"></i>' : ''}
                                         </p>
                                         <p class="text-xs text-slate-500 font-medium">${c.eventNature || 'Prestation'} • ${formatEventDates(c.eventDate, c.eventEndDate)}</p>
@@ -1583,9 +1588,9 @@
             overlay.innerHTML = `
                 <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200">
                     <div class="p-6 border-b flex justify-between items-center bg-blue-600 text-white"><h3 class="text-xl font-bold flex items-center gap-2"><i data-lucide="contact-2"></i> Sélectionner un client</h3><button onclick="togglePicker(false)" class="p-2 hover:bg-white/20 rounded-xl transition-all"><i data-lucide="x"></i></button></div>
-                    <div class="p-4 bg-slate-50"><div class="relative"><i data-lucide="search" class="absolute left-3 top-3 w-4 h-4 text-slate-400"></i><input type="text" placeholder="Rechercher un client..." oninput="filterPicker(this.value)" class="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:border-blue-500 outline-none shadow-sm"></div></div>
+                    <div class="p-4 bg-slate-50"><div class="relative"><i data-lucide="search" class="absolute left-3 top-3 w-4 h-4 text-slate-400"></i><input type="text" placeholder="Rechercher une société ou un client..." oninput="filterPicker(this.value)" class="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:border-blue-500 outline-none shadow-sm"></div></div>
                     <div id="picker-list" class="flex-1 overflow-y-auto p-2 space-y-1">
-                        ${clients.map(c => `<button onclick="selectClientFromPicker('${c.id}')" class="picker-item w-full text-left p-4 hover:bg-blue-50 rounded-2xl border border-transparent hover:border-blue-100 group transition-all"><p class="font-bold text-slate-800 group-hover:text-blue-700">${c.name}</p><p class="text-xs text-slate-500">${c.org || 'Particulier'} • ${c.city || '-'}</p></button>`).join('')}
+                        ${clients.map(c => `<button onclick="selectClientFromPicker('${c.id}')" class="picker-item w-full text-left p-4 hover:bg-blue-50 rounded-2xl border border-transparent hover:border-blue-100 group transition-all"><p class="font-bold text-slate-800 group-hover:text-blue-700">${c.org || c.name}</p><p class="text-xs text-slate-500">${c.org ? 'Contact: ' + c.name : 'Particulier'} • ${c.city || '-'}</p></button>`).join('')}
                     </div>
                     <div class="p-4 border-t bg-slate-50 flex justify-end"><button onclick="togglePicker(false)" class="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition-colors shadow-sm">Fermer la fenêtre</button></div>
                 </div>
@@ -1616,12 +1621,12 @@
                     <form id="contract-form" onsubmit="submitContract(event)" class="p-8 space-y-10">
                         <div class="space-y-6">
                             <div class="flex justify-between items-center border-b pb-2">
-                                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="user-plus" class="text-blue-600"></i> Client</h3>
+                                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2"><i data-lucide="building" class="text-blue-600"></i> Société / Organisateur</h3>
                                 <button type="button" onclick="togglePicker(true)" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-4 py-2 rounded-xl font-bold border border-blue-100 transition-all"><i data-lucide="contact-2" class="w-4 h-4 inline mr-1"></i> Charger existant</button>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div><label class="block text-xs font-bold uppercase text-slate-500 mb-1">Nom & Prénom</label><input type="text" name="clientName" value="${draftContract.clientName}" oninput="updateDraft(this)" class="w-full border-2 border-slate-100 rounded-xl p-3 focus:border-blue-500 outline-none" required></div>
-                                <div><label class="block text-xs font-bold uppercase text-slate-500 mb-1">Société</label><input type="text" name="clientOrg" value="${draftContract.clientOrg}" oninput="updateDraft(this)" class="w-full border-2 border-slate-100 rounded-xl p-3 focus:border-blue-500 outline-none"></div>
+                                <div><label class="block text-xs font-bold uppercase text-slate-500 mb-1">Société / Association</label><input type="text" name="clientOrg" value="${draftContract.clientOrg}" oninput="updateDraft(this)" class="w-full border-2 border-slate-100 rounded-xl p-3 focus:border-blue-500 outline-none" placeholder="Nom de la structure"></div>
+                                <div><label class="block text-xs font-bold uppercase text-slate-500 mb-1">Nom du Contact</label><input type="text" name="clientName" value="${draftContract.clientName}" oninput="updateDraft(this)" class="w-full border-2 border-slate-100 rounded-xl p-3 focus:border-blue-500 outline-none" required></div>
                                 <div class="md:col-span-2"><label class="block text-xs font-bold uppercase text-slate-500 mb-1">Adresse complète</label><input type="text" name="clientAddress" value="${draftContract.clientAddress}" oninput="updateDraft(this)" class="w-full border-2 border-slate-100 rounded-xl p-3 focus:border-blue-500 outline-none"></div>
                                 <div><label class="block text-xs font-bold uppercase text-slate-500 mb-1">CP</label><input type="text" name="clientZip" value="${draftContract.clientZip}" oninput="updateDraft(this)" class="w-full border-2 border-slate-100 rounded-xl p-3 focus:border-blue-500 outline-none"></div>
                                 <div><label class="block text-xs font-bold uppercase text-slate-500 mb-1">Ville</label><input type="text" name="clientCity" value="${draftContract.clientCity}" oninput="updateDraft(this)" class="w-full border-2 border-slate-100 rounded-xl p-3 focus:border-blue-500 outline-none"></div>
@@ -1699,30 +1704,30 @@
             
             const activeContracts = contracts.filter(c => !c.isArchived);
             const grouped = activeContracts.reduce((acc, contract) => {
-                const name = contract.clientName || 'Sans Nom';
-                if (!acc[name]) acc[name] = [];
-                acc[name].push(contract);
+                const orgName = (contract.clientOrg && contract.clientOrg.trim() !== '') ? contract.clientOrg.trim() : (contract.clientName || 'Sans Nom');
+                if (!acc[orgName]) acc[orgName] = [];
+                acc[orgName].push(contract);
                 return acc;
             }, {});
 
-            const sortedClientNames = Object.keys(grouped).sort();
+            const sortedOrgNames = Object.keys(grouped).sort();
 
             div.innerHTML = `
                 <div class="flex justify-between items-center">
-                    <h2 class="text-2xl font-bold text-slate-800">Historique par client</h2>
+                    <h2 class="text-2xl font-bold text-slate-800">Historique par Société</h2>
                     <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">${activeContracts.length} Contrats Actifs</span>
                 </div>
                 <div class="space-y-8">
                     ${activeContracts.length === 0 ? '<p class="text-slate-400 italic py-10 text-center bg-white rounded-2xl border border-dashed">Aucun contrat actif enregistré.</p>' : ''}
-                    ${sortedClientNames.map(clientName => `
+                    ${sortedOrgNames.map(orgName => `
                         <div class="space-y-3">
                             <h3 class="text-sm font-black uppercase text-slate-400 tracking-widest flex items-center gap-3 px-2">
-                                <i data-lucide="user" class="w-4 h-4"></i> ${clientName}
+                                <i data-lucide="building-2" class="w-4 h-4"></i> ${orgName}
                                 <span class="h-px flex-1 bg-slate-200"></span>
-                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">${grouped[clientName].length} prestation(s)</span>
+                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">${grouped[orgName].length} prestation(s)</span>
                             </h3>
                             <div class="grid gap-3">
-                                ${grouped[clientName].map(c => `
+                                ${grouped[orgName].map(c => `
                                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col xl:flex-row justify-between xl:items-center hover:border-blue-300 transition-all group gap-6">
                                         <div class="flex items-center gap-4">
                                             <div class="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 relative">
@@ -1731,7 +1736,7 @@
                                             </div>
                                             <div>
                                                 <p class="font-bold text-lg text-slate-900">${c.eventNature || 'Prestation'}</p>
-                                                <p class="text-xs text-slate-500">${formatEventDates(c.eventDate, c.eventEndDate)}</p>
+                                                <p class="text-xs text-slate-500">${c.clientName} • ${formatEventDates(c.eventDate, c.eventEndDate)}</p>
                                             </div>
                                         </div>
                                         
@@ -1831,7 +1836,7 @@
                                                 ${c.clientSignature ? '<div class="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-1 shadow-sm"><i data-lucide="pen-tool" class="w-3 h-3"></i></div>' : ''}
                                             </div>
                                             <div>
-                                                <p class="font-bold text-lg text-slate-800">${c.clientName} <span class="text-sm font-medium text-slate-500">- ${c.eventNature || 'Prestation'}</span></p>
+                                                <p class="font-bold text-lg text-slate-800">${c.clientOrg || c.clientName} <span class="text-sm font-medium text-slate-500">- ${c.eventNature || 'Prestation'}</span></p>
                                                 <p class="text-xs text-slate-500">${formatEventDates(c.eventDate, c.eventEndDate)}</p>
                                             </div>
                                         </div>
@@ -1890,7 +1895,7 @@
             div.innerHTML = `
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
                     <div class="flex items-center gap-4">
-                        <h2 class="text-2xl font-bold text-slate-800">Base Clients</h2>
+                        <h2 class="text-2xl font-bold text-slate-800">Base Sociétés & Clients</h2>
                         <span class="bg-green-100 text-green-700 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest">${clients.length} Clients</span>
                     </div>
                     <button onclick='setView("client-edit", { id: "", name: "", org: "", address: "", zip: "", city: "", tel: "", email: "" })' class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center gap-2 transition-all transform hover:scale-105">
@@ -1900,8 +1905,8 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     ${clients.map(c => `
                         <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col hover:border-blue-300 transition-all group">
-                            <h3 class="font-black text-xl text-slate-900 mb-1">${c.name}</h3>
-                            <p class="text-xs font-black text-blue-600 uppercase tracking-[0.2em] mb-6">${c.org || 'Client Particulier'}</p>
+                            <h3 class="font-black text-xl text-slate-900 mb-1">${c.org || c.name}</h3>
+                            <p class="text-xs font-black text-blue-600 uppercase tracking-[0.2em] mb-6">${c.org ? c.name : 'Client Particulier'}</p>
                             
                             <div class="space-y-4 text-sm text-slate-600 border-t pt-6 flex-1 font-medium">
                                 <p class="flex items-center gap-4"><i data-lucide="phone" class="w-5 h-5 text-slate-300"></i> ${c.tel || '-'}</p>
@@ -1931,12 +1936,12 @@
                 <div class="bg-white rounded-3xl shadow-xl p-8 border border-slate-200">
                     <div class="flex items-center gap-4 mb-8 border-b pb-6">
                         <button onclick="setView('clients')" class="p-3 hover:bg-slate-100 rounded-full transition-all text-slate-400 hover:text-slate-900"><i data-lucide="arrow-left"></i></button>
-                        <h2 class="text-2xl font-black flex items-center gap-3 text-slate-900 italic uppercase tracking-tighter">${isNew ? 'Ajouter un client' : 'Modifier la fiche client'}</h2>
+                        <h2 class="text-2xl font-black flex items-center gap-3 text-slate-900 italic uppercase tracking-tighter">${isNew ? 'Ajouter une Société / Client' : 'Modifier la fiche client'}</h2>
                     </div>
                     <form onsubmit="saveClient(event, '${client.id || ''}')" class="space-y-8">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="md:col-span-2"><label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Nom & Prénom</label><input type="text" name="name" value="${client.name}" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 shadow-sm" required></div>
-                            <div class="md:col-span-2"><label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Association / Société</label><input type="text" name="org" value="${client.org || ''}" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 shadow-sm"></div>
+                            <div class="md:col-span-2"><label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Association / Société</label><input type="text" name="org" value="${client.org || ''}" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 shadow-sm" placeholder="Ex: Comité des fêtes de..."></div>
+                            <div class="md:col-span-2"><label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Nom & Prénom (Contact)</label><input type="text" name="name" value="${client.name}" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 shadow-sm" required></div>
                             <div class="md:col-span-2"><label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Adresse complète</label><input type="text" name="address" value="${client.address || ''}" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 shadow-sm"></div>
                             <div><label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Code Postal</label><input type="text" name="zip" value="${client.zip || ''}" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 shadow-sm"></div>
                             <div><label class="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Ville</label><input type="text" name="city" value="${client.city || ''}" class="w-full border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-blue-500 transition-all font-bold text-slate-700 shadow-sm"></div>
